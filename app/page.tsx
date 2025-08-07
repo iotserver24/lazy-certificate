@@ -24,7 +24,7 @@ interface TextSettings {
   color: string
   align: 'left' | 'center' | 'right'
   bold: boolean
-  italic: boolean
+  italic: false
   underline: boolean
   shadow: boolean
   shadowColor: string
@@ -769,7 +769,7 @@ export default function CertificateGenerator() {
                           onClick={() => setSelectedAreaId(area.id)}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-white">{area.name}</span> {/* Added area.name here */}
+                            <span className="text-sm font-medium text-white"></span>
                             {selectedAreaId === area.id && (
                               <div className="flex space-x-1">
                                 <Button
@@ -899,403 +899,402 @@ export default function CertificateGenerator() {
                           </SelectContent>
                         </Select>
                       </div>
-                    
-                    {/* Custom Font Upload */}
-                    {false && (
-                    <div className="space-y-3">
-                      <Label className="text-xs text-gray-300 font-medium">Upload Custom Font</Label>
-                      <Button
-                        onClick={() => fontInputRef.current?.click()}
-                        className="w-full bg-gray-600 hover:bg-gray-700 text-white transition-colors duration-200 transform hover:scale-[1.01]"
-                        variant="outline"
-                      >
-                        <PlusCircle className="w-4 h-4 mr-2" />
-                        Upload Font File
-                      </Button>
-                      <input
-                        ref={fontInputRef}
-                        type="file"
-                        accept=".ttf,.otf,.woff,.woff2"
-                        onChange={handleFontUpload}
-                        className="hidden"
-                      />
-                      {customFonts.length > 0 && (
-                        <div className="text-xs text-gray-400 bg-gray-800/30 p-2 rounded border border-gray-700">
-                          Loaded: {customFonts.join(', ')}
-                        </div>
-                      )}
-                    </div>
-                    )}
+                      
+                      {/* Custom Font Upload */}
+                      <div className="space-y-3">
+                        <Label className="text-xs text-gray-300 font-medium">Upload Custom Font</Label>
+                        <Button
+                          onClick={() => fontInputRef.current?.click()}
+                          className="w-full bg-gray-600 hover:bg-gray-700 text-white transition-colors duration-200 transform hover:scale-[1.01]"
+                          variant="outline"
+                        >
+                          <PlusCircle className="w-4 h-4 mr-2" />
+                          Upload Font File
+                        </Button>
+                        <input
+                          ref={fontInputRef}
+                          type="file"
+                          accept=".ttf,.otf,.woff,.woff2"
+                          onChange={handleFontUpload}
+                          className="hidden"
+                        />
+                        {customFonts.length > 0 && (
+                          <div className="text-xs text-gray-400 bg-gray-800/30 p-2 rounded border border-gray-700">
+                            Loaded: {customFonts.join(', ')}
+                          </div>
+                        )}
+                      </div>
 
-                    <div>
-                      <Label className="text-xs text-gray-300 font-medium">Size: {textSettings.size}px</Label>
-                      <Slider
-                        value={[textSettings.size]}
-                        onValueChange={([value]) => setTextSettings(prev => ({ ...prev, size: value }))}
-                        min={12}
-                        max={200}
-                        step={1}
-                        className="mt-2"
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label className="text-xs text-gray-300 font-medium">Color</Label>
-                        <Input
-                          type="color"
-                          value={textSettings.color}
-                          onChange={(e) => setTextSettings(prev => ({ ...prev, color: e.target.value }))}
-                          className="h-10 bg-gray-800 border-gray-600 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                        <Label className="text-xs text-gray-300 font-medium">Size: {textSettings.size}px</Label>
+                        <Slider
+                          value={[textSettings.size]}
+                          onValueChange={([value]) => setTextSettings(prev => ({ ...prev, size: value }))}
+                          min={12}
+                          max={200}
+                          step={1}
+                          className="mt-2"
                         />
                       </div>
-                      <div>
-                        <Label className="text-xs text-gray-300 font-medium">Alignment</Label>
-                        <div className="flex border border-gray-600 rounded bg-gray-800 overflow-hidden">
-                          <Button
-                            size="sm"
-                            variant={textSettings.align === 'left' ? 'default' : 'ghost'}
-                            onClick={() => setTextSettings(prev => ({ ...prev, align: 'left' }))}
-                            className="flex-1 rounded-none text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
-                          >
-                            <AlignLeft className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant={textSettings.align === 'center' ? 'default' : 'ghost'}
-                            onClick={() => setTextSettings(prev => ({ ...prev, align: 'center' }))}
-                            className="flex-1 rounded-none border-x border-gray-600 text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
-                          >
-                            <AlignCenter className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant={textSettings.align === 'right' ? 'default' : 'ghost'}
-                            onClick={() => setTextSettings(prev => ({ ...prev, align: 'right' }))}
-                            className="flex-1 rounded-none text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
-                          >
-                            <AlignRight className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Text Style Toggles */}
-                    <div className="grid grid-cols-3 gap-x-6"> {/* Changed gap-3 to gap-x-6 */}
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          checked={textSettings.bold}
-                          onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, bold: checked }))}
-                        />
-                        <Label className="text-xs text-gray-300 flex items-center gap-1 cursor-pointer">
-                          <Bold className="w-3 h-3" />
-                          Bold
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          checked={textSettings.italic}
-                          onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, italic: checked }))}
-                        />
-                        <Label className="text-xs text-gray-300 flex items-center gap-1 cursor-pointer">
-                          <Italic className="w-3 h-3" />
-                          Italic
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          checked={textSettings.underline}
-                          onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, underline: checked }))}
-                        />
-                        <Label className="text-xs text-gray-300 flex items-center gap-1 cursor-pointer">
-                          <Underline className="w-3 h-3" />
-                          Underline {/* Changed "Under" to "Underline" */}
-                        </Label>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Text Effects */}
-                <Card className="bg-gray-700 border-gray-600 shadow-lg">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center gap-2 text-white">
-                      <Palette className="w-4 h-4 text-pink-400" />
-                      Effects
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        checked={textSettings.shadow}
-                        onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, shadow: checked }))}
-                      />
-                      <Label className="text-xs text-gray-300 cursor-pointer">Text Shadow</Label>
-                    </div>
-                    
-                    {textSettings.shadow && (
-                      <div className="space-y-3 pl-4 border-l-2 border-gray-600">
+                      
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label className="text-xs text-gray-300">Shadow Color</Label>
+                          <Label className="text-xs text-gray-300 font-medium">Color</Label>
                           <Input
                             type="color"
-                            value={textSettings.shadowColor}
-                            onChange={(e) => setTextSettings(prev => ({ ...prev, shadowColor: e.target.value }))}
-                            className="h-8 bg-gray-800 border-gray-600 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                            value={textSettings.color}
+                            onChange={(e) => setTextSettings(prev => ({ ...prev, color: e.target.value }))}
+                            className="h-10 bg-gray-800 border-gray-600 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-gray-300">Blur: {textSettings.shadowBlur}px</Label>
-                          <Slider
-                            value={[textSettings.shadowBlur]}
-                            onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowBlur: value }))}
-                            min={0}
-                            max={20}
-                            step={1}
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-xs text-gray-300">X: {textSettings.shadowOffsetX}px</Label>
-                            <Slider
-                              value={[textSettings.shadowOffsetX]}
-                              onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowOffsetX: value }))}
-                              min={-10}
-                              max={10}
-                              step={1}
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-gray-300">Y: {textSettings.shadowOffsetY}px</Label>
-                            <Slider
-                              value={[textSettings.shadowOffsetY]}
-                              onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowOffsetY: value }))}
-                              min={-10}
-                              max={10}
-                              step={1}
-                            />
+                          <Label className="text-xs text-gray-300 font-medium">Alignment</Label>
+                          <div className="flex border border-gray-600 rounded bg-gray-800 overflow-hidden">
+                            <Button
+                              size="sm"
+                              variant={textSettings.align === 'left' ? 'default' : 'ghost'}
+                              onClick={() => setTextSettings(prev => ({ ...prev, align: 'left' }))}
+                              className="flex-1 rounded-none text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
+                            >
+                              <AlignLeft className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={textSettings.align === 'center' ? 'default' : 'ghost'}
+                              onClick={() => setTextSettings(prev => ({ ...prev, align: 'center' }))}
+                              className="flex-1 rounded-none border-x border-gray-600 text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
+                            >
+                              <AlignCenter className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={textSettings.align === 'right' ? 'default' : 'ghost'}
+                              onClick={() => setTextSettings(prev => ({ ...prev, align: 'right' }))}
+                              className="flex-1 rounded-none text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
+                            >
+                              <AlignRight className="w-3 h-3" />
+                            </Button>
                           </div>
                         </div>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </ScrollArea>
-          </TabsContent>
-          
-          <TabsContent value="logs" className="flex-1 p-4 overflow-y-auto">
-            <LogViewer logs={logs} />
-          </TabsContent>
-        </Tabs>
-      </div>
 
-      {/* Main Canvas Area */}
-      <div ref={mainContentRef} className="flex-1 flex flex-col min-w-0 bg-gray-900">
-        {/* Canvas Toolbar */}
-        <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
-          <div className="flex items-center space-x-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setShowGrid(!showGrid)}
-              className="border-gray-600 text-white hover:bg-gray-700 transition-colors duration-200"
-            >
-              <Grid className="w-4 h-4 mr-1" />
-              Grid
-            </Button>
-            <Separator orientation="vertical" className="h-6 bg-gray-600" />
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleZoomOut}
-              className="border-gray-600 text-white hover:bg-gray-700 transition-colors duration-200"
-            >
-              <ZoomOut className="w-4 h-4" />
-            </Button>
-            <span
-              className="text-sm text-gray-300 cursor-pointer"
-              onClick={handleResetZoom}
-              title="Reset Zoom"
-            >
-              {Math.round(zoomLevel * 100)}%
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleZoomIn}
-              className="border-gray-600 text-white hover:bg-gray-700 transition-colors duration-200"
-            >
-              <ZoomIn className="w-4 h-4" />
-            </Button>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setIsSelecting(true)}
-              disabled={!templateImage}
-              className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 transition-colors duration-200"
-            >
-              <Move className="w-4 h-4 mr-1" />
-              <span className="hidden sm:inline">Add Area</span>
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!selectedAreaId}
-              onClick={duplicateSelectedArea}
-              className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 transition-colors duration-200"
-            >
-              <Copy className="w-4 h-4 mr-1" />
-              <span className="hidden sm:inline">Duplicate</span>
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!selectedAreaId}
-              onClick={deleteSelectedArea}
-              className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 transition-colors duration-200"
-            >
-              <Trash2 className="w-4 h-4 mr-1" />
-              <span className="hidden sm:inline">Delete</span>
-            </Button>
-          </div>
+                      {/* Text Style Toggles */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            checked={textSettings.bold}
+                            onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, bold: checked }))}
+                          />
+                          <Label className="text-xs text-gray-300 flex items-center gap-1 cursor-pointer">
+                            <Bold className="w-3 h-3" />
+                            Bold
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            checked={textSettings.italic}
+                            onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, italic: checked }))}
+                          />
+                          <Label className="text-xs text-gray-300 flex items-center gap-1 cursor-pointer">
+                            <Italic className="w-3 h-3" />
+                            Italic
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            checked={textSettings.underline}
+                            onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, underline: checked }))}
+                          />
+                          <Label className="text-xs text-gray-300 flex items-center gap-1 cursor-pointer">
+                            <Underline className="w-3 h-3" />
+                            Under
+                          </Label>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Text Effects */}
+                  <Card className="bg-gray-700 border-gray-600 shadow-lg">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm flex items-center gap-2 text-white">
+                        <Palette className="w-4 h-4 text-pink-400" />
+                        Effects
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={textSettings.shadow}
+                          onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, shadow: checked }))}
+                        />
+                        <Label className="text-xs text-gray-300 cursor-pointer">Text Shadow</Label>
+                      </div>
+                      
+                      {textSettings.shadow && (
+                        <div className="space-y-3 pl-4 border-l-2 border-gray-600">
+                          <div>
+                            <Label className="text-xs text-gray-300">Shadow Color</Label>
+                            <Input
+                              type="color"
+                              value={textSettings.shadowColor}
+                              onChange={(e) => setTextSettings(prev => ({ ...prev, shadowColor: e.target.value }))}
+                              className="h-8 bg-gray-800 border-gray-600 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-gray-300">Blur: {textSettings.shadowBlur}px</Label>
+                            <Slider
+                              value={[textSettings.shadowBlur]}
+                              onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowBlur: value }))}
+                              min={0}
+                              max={20}
+                              step={1}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-xs text-gray-300">X: {textSettings.shadowOffsetX}px</Label>
+                              <Slider
+                                value={[textSettings.shadowOffsetX]}
+                                onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowOffsetX: value }))}
+                                min={-10}
+                                max={10}
+                                step={1}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs text-gray-300">Y: {textSettings.shadowOffsetY}px</Label>
+                              <Slider
+                                value={[textSettings.shadowOffsetY]}
+                                onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowOffsetY: value }))}
+                                min={-10}
+                                max={10}
+                                step={1}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </ScrollArea>
+            </TabsContent>
+            
+            <TabsContent value="logs" className="flex-1 p-4 overflow-y-auto">
+              <LogViewer logs={logs} />
+            </TabsContent>
+          </Tabs>
         </div>
 
-        {/* Canvas */}
-        <div className="flex-1 p-4 lg:p-8 flex items-center justify-center overflow-auto">
-          {templateImage ? (
-            <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border border-gray-700 flex-shrink-0">
-              <canvas
-                ref={canvasRef}
-                onMouseDown={handleCanvasMouseDown}
-                className="max-w-full h-auto border border-gray-600 rounded"
-                style={{ cursor: isSelecting ? 'crosshair' : 'default' }}
-              />
-            </div>
-          ) : (
-            <div className="text-center text-gray-400">
-              <FileImage className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-              <h3 className="text-lg font-medium mb-2 text-white">No Template Loaded</h3>
-              <p className="text-sm">Upload a certificate template to get started</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Right Sidebar - Generation */}
-      <div className={`${rightSidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 fixed lg:relative z-20 right-0 w-80 flex-shrink-0 bg-gray-800 border-l border-gray-700 p-4 transition-transform duration-300 ease-in-out`}>
-        <div className="flex items-center justify-between mb-4 lg:hidden bg-gray-900 border-b border-gray-700 -mx-4 px-4 pt-4">
-          <h2 className="text-lg font-semibold text-white">Generate</h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setRightSidebarOpen(false)}
-            className="text-white hover:bg-gray-700 transition-colors duration-200"
-          >
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
-        
-        <div className="space-y-4 overflow-y-auto h-full pb-4">
-          <Card className="bg-gray-700 border-gray-600 shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2 text-white">
-                <Download className="w-4 h-4 text-green-400" />
-                Generate Certificates
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-center">
-                <div>
-                  <div className="text-2xl font-bold text-white">{names.length}</div>
-                  <div className="text-xs text-gray-400">Recipients</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-white">{nameAreas.length}</div>
-                  <div className="text-xs text-gray-400">Text Areas</div>
-                </div>
-              </div>
-
-              {isGenerating && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs text-gray-300">
-                    <span>Generating...</span>
-                    <span>{Math.round(generationProgress)}%</span>
-                  </div>
-                  <Progress value={generationProgress} className="h-2" />
-                </div>
-              )}
-
+        {/* Main Canvas Area */}
+        <div ref={mainContentRef} className="flex-1 flex flex-col min-w-0 bg-gray-900">
+          {/* Canvas Toolbar */}
+          <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
+            <div className="flex items-center space-x-2">
               <Button
-                onClick={generateAllCertificates}
-                disabled={!templateImage || nameAreas.length === 0 || names.length === 0 || isGenerating}
-                className="w-full bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-600 disabled:text-gray-400 transition-colors duration-200 transform hover:scale-[1.01]"
-                size="lg"
+                size="sm"
+                variant="outline"
+                onClick={() => setShowGrid(!showGrid)}
+                className="border-gray-600 text-white hover:bg-gray-700 transition-colors duration-200"
               >
-                {isGenerating ? (
-                  <>Generating...</>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4 mr-2" />
-                    Generate & Download
-                  </>
-                )}
+                <Grid className="w-4 h-4 mr-1" />
+                Grid
               </Button>
+              <Separator orientation="vertical" className="h-6 bg-gray-600" />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleZoomOut}
+                className="border-gray-600 text-white hover:bg-gray-700 transition-colors duration-200"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+              <span
+                className="text-sm text-gray-300 cursor-pointer"
+                onClick={handleResetZoom}
+                title="Reset Zoom"
+              >
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleZoomIn}
+                className="border-gray-600 text-white hover:bg-gray-700 transition-colors duration-200"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsSelecting(true)}
+                disabled={!templateImage}
+                className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 transition-colors duration-200"
+              >
+                <Move className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">Add Area</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!selectedAreaId}
+                onClick={duplicateSelectedArea}
+                className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 transition-colors duration-200"
+              >
+                <Copy className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">Duplicate</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!selectedAreaId}
+                onClick={deleteSelectedArea}
+                className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 transition-colors duration-200"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">Delete</span>
+              </Button>
+            </div>
+          </div>
 
-              {(!templateImage || nameAreas.length === 0 || names.length === 0) && (
-                <div className="text-xs text-gray-400 text-center space-y-1">
-                  {!templateImage && <div>• Upload a template</div>}
-                  {nameAreas.length === 0 && <div>• Add text areas</div>}
-                  {names.length === 0 && <div>• Add recipient names</div>}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Quick Stats */}
-          <Card className="bg-gray-700 border-gray-600 shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-white">Project Stats</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Template Size:</span>
-                <span className="text-white">{templateDimensions.width}×{templateDimensions.height}px</span>
+          {/* Canvas */}
+          <div className="flex-1 p-4 lg:p-8 flex items-center justify-center overflow-auto">
+            {templateImage ? (
+              <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border border-gray-700 flex-shrink-0">
+                <canvas
+                  ref={canvasRef}
+                  onMouseDown={handleCanvasMouseDown}
+                  className="max-w-full h-auto border border-gray-600 rounded"
+                  style={{ cursor: isSelecting ? 'crosshair' : 'default' }}
+                />
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Text Areas:</span>
-                <span className="text-white">{nameAreas.length}</span>
+            ) : (
+              <div className="text-center text-gray-400">
+                <FileImage className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+                <h3 className="text-lg font-medium mb-2 text-white">No Template Loaded</h3>
+                <p className="text-sm">Upload a certificate template to get started</p>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Recipients:</span>
-                <span className="text-white">{names.length}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Font:</span>
-                <span className="text-white">{textSettings.font}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Font Size:</span>
-                <span className="text-white">{textSettings.size}px</span>
-              </div>
-            </CardContent>
-          </Card>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Mobile Overlay */}
-      {(sidebarOpen || rightSidebarOpen) && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-10 lg:hidden"
-          onClick={() => {
-            setSidebarOpen(false)
-            setRightSidebarOpen(false)
-          }}
-        />
-      )}
+        {/* Right Sidebar - Generation */}
+        <div className={`${rightSidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 fixed lg:relative z-20 right-0 w-80 flex-shrink-0 bg-gray-800 border-l border-gray-700 p-4 transition-transform duration-300 ease-in-out`}>
+          <div className="flex items-center justify-between mb-4 lg:hidden bg-gray-900 border-b border-gray-700 -mx-4 px-4 pt-4">
+            <h2 className="text-lg font-semibold text-white">Generate</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setRightSidebarOpen(false)}
+              className="text-white hover:bg-gray-700 transition-colors duration-200"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
+          
+          <div className="space-y-4 overflow-y-auto h-full pb-4">
+            <Card className="bg-gray-700 border-gray-600 shadow-lg">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2 text-white">
+                  <Download className="w-4 h-4 text-green-400" />
+                  Generate Certificates
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4 text-center">
+                  <div>
+                    <div className="text-2xl font-bold text-white">{names.length}</div>
+                    <div className="text-xs text-gray-400">Recipients</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-white">{nameAreas.length}</div>
+                    <div className="text-xs text-gray-400">Text Areas</div>
+                  </div>
+                </div>
+
+                {isGenerating && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs text-gray-300">
+                      <span>Generating...</span>
+                      <span>{Math.round(generationProgress)}%</span>
+                    </div>
+                    <Progress value={generationProgress} className="h-2" />
+                  </div>
+                )}
+
+                <Button
+                  onClick={generateAllCertificates}
+                  disabled={!templateImage || nameAreas.length === 0 || names.length === 0 || isGenerating}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-600 disabled:text-gray-400 transition-colors duration-200 transform hover:scale-[1.01]"
+                  size="lg"
+                >
+                  {isGenerating ? (
+                    <>Generating...</>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 mr-2" />
+                      Generate & Download
+                    </>
+                  )}
+                </Button>
+
+                {(!templateImage || nameAreas.length === 0 || names.length === 0) && (
+                  <div className="text-xs text-gray-400 text-center space-y-1">
+                    {!templateImage && <div>• Upload a template</div>}
+                    {nameAreas.length === 0 && <div>• Add text areas</div>}
+                    {names.length === 0 && <div>• Add recipient names</div>}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Quick Stats */}
+            <Card className="bg-gray-700 border-gray-600 shadow-lg">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm text-white">Project Stats</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Template Size:</span>
+                  <span className="text-white">{templateDimensions.width}×{templateDimensions.height}px</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Text Areas:</span>
+                  <span className="text-white">{nameAreas.length}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Recipients:</span>
+                  <span className="text-white">{names.length}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Font:</span>
+                  <span className="text-white">{textSettings.font}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Font Size:</span>
+                  <span className="text-white">{textSettings.size}px</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Mobile Overlay */}
+        {(sidebarOpen || rightSidebarOpen) && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-10 lg:hidden"
+            onClick={() => {
+              setSidebarOpen(false)
+              setRightSidebarOpen(false)
+            }}
+          />
+        )}
+      </div>
     </div>
   )
 }
