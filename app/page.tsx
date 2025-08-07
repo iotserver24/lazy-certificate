@@ -900,7 +900,7 @@ export default function CertificateGenerator() {
                         </Select>
                       </div>
                       
-                      {/* Custom Font Upload */}
+                      {/* Custom Font Upload - Temporarily disabled
                       <div className="space-y-3">
                         <Label className="text-xs text-gray-300 font-medium">Upload Custom Font</Label>
                         <Button
@@ -924,6 +924,7 @@ export default function CertificateGenerator() {
                           </div>
                         )}
                       </div>
+                      */}
 
                       <div>
                         <Label className="text-xs text-gray-300 font-medium">Size: {textSettings.size}px</Label>
@@ -937,18 +938,18 @@ export default function CertificateGenerator() {
                         />
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-4">
                         <div>
-                          <Label className="text-xs text-gray-300 font-medium">Color</Label>
+                          <Label className="text-xs text-gray-300 font-medium mb-2 block">Color</Label>
                           <Input
                             type="color"
                             value={textSettings.color}
                             onChange={(e) => setTextSettings(prev => ({ ...prev, color: e.target.value }))}
-                            className="h-10 bg-gray-800 border-gray-600 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                            className="w-full h-10 bg-gray-800 border-gray-600 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-gray-300 font-medium">Alignment</Label>
+                          <Label className="text-xs text-gray-300 font-medium mb-2 block">Alignment</Label>
                           <div className="flex border border-gray-600 rounded bg-gray-800 overflow-hidden">
                             <Button
                               size="sm"
@@ -956,7 +957,7 @@ export default function CertificateGenerator() {
                               onClick={() => setTextSettings(prev => ({ ...prev, align: 'left' }))}
                               className="flex-1 rounded-none text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
                             >
-                              <AlignLeft className="w-3 h-3" />
+                              <AlignLeft className="w-4 h-4" />
                             </Button>
                             <Button
                               size="sm"
@@ -964,7 +965,7 @@ export default function CertificateGenerator() {
                               onClick={() => setTextSettings(prev => ({ ...prev, align: 'center' }))}
                               className="flex-1 rounded-none border-x border-gray-600 text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
                             >
-                              <AlignCenter className="w-3 h-3" />
+                              <AlignCenter className="w-4 h-4" />
                             </Button>
                             <Button
                               size="sm"
@@ -972,43 +973,45 @@ export default function CertificateGenerator() {
                               onClick={() => setTextSettings(prev => ({ ...prev, align: 'right' }))}
                               className="flex-1 rounded-none text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
                             >
-                              <AlignRight className="w-3 h-3" />
+                              <AlignRight className="w-4 h-4" />
                             </Button>
                           </div>
                         </div>
                       </div>
 
-                      {/* Text Style Toggles */}
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            checked={textSettings.bold}
-                            onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, bold: checked }))}
-                          />
-                          <Label className="text-xs text-gray-300 flex items-center gap-1 cursor-pointer">
-                            <Bold className="w-3 h-3" />
-                            Bold
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            checked={textSettings.italic}
-                            onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, italic: checked }))}
-                          />
-                          <Label className="text-xs text-gray-300 flex items-center gap-1 cursor-pointer">
-                            <Italic className="w-3 h-3" />
-                            Italic
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            checked={textSettings.underline}
-                            onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, underline: checked }))}
-                          />
-                          <Label className="text-xs text-gray-300 flex items-center gap-1 cursor-pointer">
-                            <Underline className="w-3 h-3" />
-                            Under
-                          </Label>
+                      <div className="space-y-3">
+                        <Label className="text-xs text-gray-300 font-medium">Text Style</Label>
+                        <div className="grid grid-cols-1 gap-3">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm text-gray-300 flex items-center gap-2 cursor-pointer">
+                              <Bold className="w-4 h-4" />
+                              Bold
+                            </Label>
+                            <Switch
+                              checked={textSettings.bold}
+                              onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, bold: checked }))}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm text-gray-300 flex items-center gap-2 cursor-pointer">
+                              <Italic className="w-4 h-4" />
+                              Italic
+                            </Label>
+                            <Switch
+                              checked={textSettings.italic}
+                              onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, italic: checked }))}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm text-gray-300 flex items-center gap-2 cursor-pointer">
+                              <Underline className="w-4 h-4" />
+                              Underline
+                            </Label>
+                            <Switch
+                              checked={textSettings.underline}
+                              onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, underline: checked }))}
+                            />
+                          </div>
                         </div>
                       </div>
                     </CardContent>
