@@ -17,6 +17,7 @@ import { Separator } from '@/components/ui/separator'
 import { Upload, Download, Eye, Settings, FileImage, Users, Palette, Type, RotateCcw, Trash2, Copy, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Layers, Move, ZoomIn, ZoomOut, Grid, ExternalLink, Menu, X, PlusCircle } from 'lucide-react'
 import JSZip from 'jszip'
 import LogViewer from '@/components/log-viewer'
+import { useMobile } from '@/hooks/use-mobile'
 
 interface TextSettings {
   font: string
@@ -82,7 +83,7 @@ export default function CertificateGenerator() {
   })
   const [names, setNames] = useState<string[]>([])
   const [nameInput, setNameInput] = useState('')
-  const [isSelecting, setIsSelecting] = useState(false)
+  const [isSelecting, setIsSelecting] = useState(false) // For desktop drag-to-draw
   const [previewName, setPreviewName] = useState('John Doe')
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState(0)
@@ -93,7 +94,8 @@ export default function CertificateGenerator() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false)
   const [customFonts, setCustomFonts] = useState<string[]>([]);
-  const [zoomLevel, setZoomLevel] = useState(1.0); // New state for zoom
+  const [zoomLevel, setZoomLevel] = useState(1.0);
+  const { isMobile } = useMobile();
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -110,6 +112,32 @@ export default function CertificateGenerator() {
     }
     setLogs(prev => [newLog, ...prev.slice(0, 49)])
   }, [])
+
+  const addDefaultTextArea = useCallback(() => {
+    if (!templateImage) {
+      addLog('error', 'Please upload a template image first to add a text area.');
+      return;
+    }
+
+    // Calculate a default position and size relative to the template dimensions
+    const defaultWidth = Math.min(templateDimensions.width * 0.8, 400); // Max 400px or 80% of template width
+    const defaultHeight = Math.min(templateDimensions.height * 0.15, 100); // Max 100px or 15% of template height
+    const defaultX = (templateDimensions.width - defaultWidth) / 2;
+    const defaultY = (templateDimensions.height - defaultHeight) / 2;
+
+    const newArea: NameArea = {
+      id: Date.now().toString(),
+      name: `Text Area ${nameAreas.length + 1}`,
+      x: defaultX,
+      y: defaultY,
+      width: defaultWidth,
+      height: defaultHeight,
+    };
+
+    setNameAreas(prev => [...prev, newArea]);
+    setSelectedAreaId(newArea.id);
+    addLog('success', `Added new text area: ${newArea.name}`);
+  }, [templateImage, templateDimensions, nameAreas.length, addLog]);
 
   const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current
@@ -159,6 +187,7 @@ export default function CertificateGenerator() {
         for (let y = 0; y <= canvas.height; y += gridSize) {
           ctx.beginPath()
           ctx.moveTo(0, y)
+          ctx.lineTo(0, y)
           ctx.lineTo(canvas.width, y)
           ctx.stroke()
         }
@@ -232,11 +261,32 @@ export default function CertificateGenerator() {
         }
         
         ctx.fillText(previewName, textX, textY)
+
+        // Draw resize handles if this area is selected
+        if (area.id === selectedAreaId) {
+          ctx.fillStyle = '#3b82f6'; // Handle color
+          const handleSize = 8; // Size of the handle squares
+
+          const drawHandle = (x: number, y: number) => {
+            ctx.fillRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
+          };
+
+          // Corners
+          drawHandle(scaledArea.x, scaledArea.y); // Top-left
+          drawHandle(scaledArea.x + scaledArea.width, scaledArea.y); // Top-right
+          drawHandle(scaledArea.x, scaledArea.y + scaledArea.height); // Bottom-left
+          drawHandle(scaledArea.x + scaledArea.width, scaledArea.y + scaledArea.height); // Bottom-right
+
+          // Midpoints
+          drawHandle(scaledArea.x + scaledArea.width / 2, scaledArea.y); // Top-middle
+          drawHandle(scaledArea.x + scaledArea.width / 2, scaledArea.y + scaledArea.height); // Bottom-middle
+          drawHandle(scaledArea.x, scaledArea.y + scaledArea.height / 2); // Left-middle
+          drawHandle(scaledArea.x + scaledArea.width, scaledArea.y + scaledArea.height / 2); // Right-middle
+        }
       })
     }
     img.src = templateImage
-    // Add zoomLevel to dependencies
-    }, [templateImage, nameAreas, selectedAreaId, textSettings, previewName, showGrid, zoomLevel, mainContentRef]);
+  }, [templateImage, nameAreas, selectedAreaId, textSettings, previewName, showGrid, zoomLevel, mainContentRef]);
 
   const handleImageUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -374,69 +424,243 @@ export default function CertificateGenerator() {
   }, [addLog])
 
   const handleCanvasMouseDown = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isSelecting || !templateImage) return
-    
-    const canvas = canvasRef.current
-    if (!canvas) return
-    
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
-    
-    const startX = (event.clientX - rect.left) * scaleX / canvasScale
-    const startY = (event.clientY - rect.top) * scaleY / canvasScale
-    
-    let isDrawing = true
-    
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDrawing) return
-      
-      const currentX = (e.clientX - rect.left) * scaleX / canvasScale
-      const currentY = (e.clientY - rect.top) * scaleY / canvasScale
-      
-      const width = Math.abs(currentX - startX)
-      const height = Math.abs(currentY - startY)
-      const x = Math.min(startX, currentX)
-      const y = Math.min(startY, currentY)
-      
-      const tempArea: NameArea = {
-        id: 'temp',
-        name: 'New Area',
-        x, y, width, height
-      }
-      
-      setNameAreas(prev => {
-        const filtered = prev.filter(area => area.id !== 'temp')
-        return [...filtered, tempArea]
-      })
-    }
-    
-    const handleMouseUp = () => {
-      isDrawing = false
-      setIsSelecting(false)
-      
-      setNameAreas(prev => {
-        const tempArea = prev.find(area => area.id === 'temp')
-        if (tempArea && tempArea.width > 10 && tempArea.height > 10) {
-          const newArea: NameArea = {
-            ...tempArea,
-            id: Date.now().toString(),
-            name: `Text Area ${prev.filter(a => a.id !== 'temp').length + 1}`
-          }
-          setSelectedAreaId(newArea.id)
-          addLog('success', `Created new text area: ${newArea.name}`)
-          return [...prev.filter(area => area.id !== 'temp'), newArea]
+    if (!templateImage) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const mouseX = (event.clientX - rect.left) * scaleX;
+    const mouseY = (event.clientY - rect.top) * scaleY;
+
+    const effectiveScale = canvasScale; // Use the current effective scale
+
+    // Helper to convert canvas coordinates back to original template coordinates
+    const toOriginalCoords = (val: number) => val / effectiveScale;
+
+    // Check if clicking on a resize handle of the selected area
+    if (selectedAreaId) {
+      const selectedArea = nameAreas.find(area => area.id === selectedAreaId);
+      if (selectedArea) {
+        const scaledArea = {
+          x: selectedArea.x * effectiveScale,
+          y: selectedArea.y * effectiveScale,
+          width: selectedArea.width * effectiveScale,
+          height: selectedArea.height * effectiveScale
+        };
+
+        const resizeHandleSize = 10; // Size of the interactive handle area
+
+        const getHandle = (x: number, y: number) => {
+          // Top-left
+          if (mouseX >= x - resizeHandleSize && mouseX <= x + resizeHandleSize &&
+              mouseY >= y - resizeHandleSize && mouseY <= y + resizeHandleSize) return 'tl';
+          // Top-right
+          if (mouseX >= x + scaledArea.width - resizeHandleSize && mouseX <= x + scaledArea.width + resizeHandleSize &&
+              mouseY >= y - resizeHandleSize && mouseY <= y + resizeHandleSize) return 'tr';
+          // Bottom-left
+          if (mouseX >= x - resizeHandleSize && mouseX <= x + resizeHandleSize &&
+              mouseY >= y + scaledArea.height - resizeHandleSize && mouseY <= y + scaledArea.height + resizeHandleSize) return 'bl';
+          // Bottom-right
+          if (mouseX >= x + scaledArea.width - resizeHandleSize && mouseX <= x + scaledArea.width + resizeHandleSize &&
+              mouseY >= y + scaledArea.height - resizeHandleSize && mouseY <= y + scaledArea.height + resizeHandleSize) return 'br';
+          // Top-middle
+          if (mouseX >= x + scaledArea.width / 2 - resizeHandleSize && mouseX <= x + scaledArea.width / 2 + resizeHandleSize &&
+              mouseY >= y - resizeHandleSize && mouseY <= y + resizeHandleSize) return 'tm';
+          // Bottom-middle
+          if (mouseX >= x + scaledArea.width / 2 - resizeHandleSize && mouseX <= x + scaledArea.width / 2 + resizeHandleSize &&
+              mouseY >= y + scaledArea.height - resizeHandleSize && mouseY <= y + scaledArea.height + resizeHandleSize) return 'bm';
+          // Left-middle
+          if (mouseX >= x - resizeHandleSize && mouseX <= x + resizeHandleSize &&
+              mouseY >= y + scaledArea.height / 2 - resizeHandleSize && mouseY <= y + scaledArea.height / 2 + resizeHandleSize) return 'lm';
+          // Right-middle
+          if (mouseX >= x + scaledArea.width - resizeHandleSize && mouseX <= x + scaledArea.width + resizeHandleSize &&
+              mouseY >= y + scaledArea.height / 2 - resizeHandleSize && mouseY <= y + scaledArea.height / 2 + resizeHandleSize) return 'rm';
+          return null;
+        };
+
+        const handle = getHandle(scaledArea.x, scaledArea.y);
+        if (handle) {
+          let startX = toOriginalCoords(mouseX);
+          let startY = toOriginalCoords(mouseY);
+          let originalArea = { ...selectedArea };
+
+          const doResize = (e: MouseEvent) => {
+            const currentMouseX = (e.clientX - rect.left) * scaleX;
+            const currentMouseY = (e.clientY - rect.top) * scaleY;
+            const currentX = toOriginalCoords(currentMouseX);
+            const currentY = toOriginalCoords(currentMouseY);
+
+            let newX = originalArea.x;
+            let newY = originalArea.y;
+            let newWidth = originalArea.width;
+            let newHeight = originalArea.height;
+
+            const dx = currentX - startX;
+            const dy = currentY - startY;
+
+            switch (handle) {
+              case 'tl':
+                newX = originalArea.x + dx;
+                newY = originalArea.y + dy;
+                newWidth = originalArea.width - dx;
+                newHeight = originalArea.height - dy;
+                break;
+              case 'tr':
+                newY = originalArea.y + dy;
+                newWidth = originalArea.width + dx;
+                newHeight = originalArea.height - dy;
+                break;
+              case 'bl':
+                newX = originalArea.x + dx;
+                newWidth = originalArea.width - dx;
+                newHeight = originalArea.height + dy;
+                break;
+              case 'br':
+                newWidth = originalArea.width + dx;
+                newHeight = originalArea.height + dy;
+                break;
+              case 'tm':
+                newY = originalArea.y + dy;
+                newHeight = originalArea.height - dy;
+                break;
+              case 'bm':
+                newHeight = originalArea.height + dy;
+                break;
+              case 'lm':
+                newX = originalArea.x + dx;
+                newWidth = originalArea.width - dx;
+                break;
+              case 'rm':
+                newWidth = originalArea.width + dx;
+                break;
+            }
+
+            // Ensure minimum size
+            newWidth = Math.max(newWidth, 10);
+            newHeight = Math.max(newHeight, 10);
+
+            setNameAreas(prev => prev.map(a =>
+              a.id === selectedAreaId ? { ...a, x: newX, y: newY, width: newWidth, height: newHeight } : a
+            ));
+            // Update start for continuous drag, but only for handles that affect position
+            if (handle.includes('t') || handle.includes('l')) {
+              startX = currentX;
+              startY = currentY;
+            }
+          };
+
+          const stopResize = () => {
+            document.removeEventListener('mousemove', doResize);
+            document.removeEventListener('mouseup', stopResize);
+            addLog('info', `Resized text area: ${selectedArea.name}`);
+          };
+
+          document.addEventListener('mousemove', doResize);
+          document.addEventListener('mouseup', stopResize);
+          return; // Handled resize
         }
-        return prev.filter(area => area.id !== 'temp')
-      })
-      
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
+
+        // Check if clicking inside the selected area for dragging
+        if (mouseX >= scaledArea.x && mouseX <= scaledArea.x + scaledArea.width &&
+            mouseY >= scaledArea.y && mouseY <= scaledArea.y + scaledArea.height) {
+          let startX = toOriginalCoords(mouseX);
+          let startY = toOriginalCoords(mouseY);
+          let originalArea = { ...selectedArea };
+
+          const doDrag = (e: MouseEvent) => {
+            const currentMouseX = (e.clientX - rect.left) * scaleX;
+            const currentMouseY = (e.clientY - rect.top) * scaleY;
+            const currentX = toOriginalCoords(currentMouseX);
+            const currentY = toOriginalCoords(currentMouseY);
+
+            const dx = currentX - startX;
+            const dy = currentY - startY;
+
+            setNameAreas(prev => prev.map(a =>
+              a.id === selectedAreaId ? { ...a, x: originalArea.x + dx, y: originalArea.y + dy } : a
+            ));
+          };
+
+          const stopDrag = () => {
+            document.removeEventListener('mousemove', doDrag);
+            document.removeEventListener('mouseup', stopDrag);
+            addLog('info', `Moved text area: ${selectedArea.name}`);
+          };
+
+          document.addEventListener('mousemove', doDrag);
+          document.addEventListener('mouseup', stopDrag);
+          return; // Handled drag
+        }
+      }
     }
-    
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }, [isSelecting, templateImage, canvasScale, addLog])
+
+    // If not interacting with an existing selected area, and isSelecting is true (for desktop drawing)
+    if (isSelecting && !isMobile) { // Only allow drawing on desktop
+      const startX = toOriginalCoords(mouseX);
+      const startY = toOriginalCoords(mouseY);
+      
+      let isDrawing = true;
+      
+      const handleMouseMove = (e: MouseEvent) => {
+        if (!isDrawing) return;
+        
+        const currentMouseX = (e.clientX - rect.left) * scaleX;
+        const currentMouseY = (e.clientY - rect.top) * scaleY;
+        const currentX = toOriginalCoords(currentMouseX);
+        const currentY = toOriginalCoords(currentMouseY);
+        
+        const width = Math.abs(currentX - startX);
+        const height = Math.abs(currentY - startY);
+        const x = Math.min(startX, currentX);
+        const y = Math.min(startY, currentY);
+        
+        const tempArea: NameArea = {
+          id: 'temp',
+          name: 'New Area',
+          x, y, width, height
+        };
+        
+        setNameAreas(prev => {
+          const filtered = prev.filter(area => area.id !== 'temp');
+          return [...filtered, tempArea];
+        });
+      };
+      
+      const handleMouseUp = () => {
+        isDrawing = false;
+        setIsSelecting(false);
+        
+        setNameAreas(prev => {
+          const tempArea = prev.find(area => area.id === 'temp');
+          if (tempArea && tempArea.width > 10 && tempArea.height > 10) {
+            const newArea: NameArea = {
+              ...tempArea,
+              id: Date.now().toString(),
+              name: `Text Area ${prev.filter(a => a.id !== 'temp').length + 1}`
+            };
+            setSelectedAreaId(newArea.id);
+            addLog('success', `Created new text area: ${newArea.name}`);
+            return [...prev.filter(area => area.id !== 'temp'), newArea];
+          }
+          return prev.filter(area => area.id !== 'temp');
+        });
+        
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+      
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return; // Handled drawing
+    }
+
+    // If no interaction with existing area or drawing, deselect
+    setSelectedAreaId(null);
+  }, [isSelecting, templateImage, nameAreas, selectedAreaId, canvasScale, isMobile, addLog]);
 
   const generateCertificate = useCallback((name: string): Promise<Blob> => {
     return new Promise((resolve, reject) => {
@@ -558,154 +782,155 @@ export default function CertificateGenerator() {
       a.download = `certificates-${new Date().toISOString().split('T')[0]}.zip`
       a.click()
       URL.revokeObjectURL(url)
-    
-      addLog('success', `Successfully generated and downloaded ${names.length} certificates`)
-    } catch (error) {
-      addLog('error', `Failed to generate certificates: ${error}`)
-    } finally {
-      setIsGenerating(false)
-      setGenerationProgress(0)
+  
+    addLog('success', `Successfully generated and downloaded ${names.length} certificates`)
+  } catch (error) {
+    addLog('error', `Failed to generate certificates: ${error}`)
+  } finally {
+    setIsGenerating(false)
+    setGenerationProgress(0)
+  }
+}, [templateImage, nameAreas, names, generateCertificate, addLog])
+
+const deleteSelectedArea = useCallback(() => {
+  if (!selectedAreaId) return
+  
+  setNameAreas(prev => prev.filter(area => area.id !== selectedAreaId))
+  setSelectedAreaId(null)
+  addLog('info', 'Deleted selected text area')
+}, [selectedAreaId, addLog])
+
+const duplicateSelectedArea = useCallback(() => {
+  if (!selectedAreaId) return
+  
+  const selectedArea = nameAreas.find(area => area.id === selectedAreaId)
+  if (!selectedArea) return
+  
+  const newArea: NameArea = {
+    ...selectedArea,
+    id: Date.now().toString(),
+    name: `${selectedArea.name} Copy`,
+    x: selectedArea.x + 20,
+    y: selectedArea.y + 20
+  }
+  
+  setNameAreas(prev => [...prev, newArea])
+  setSelectedAreaId(newArea.id)
+  addLog('success', `Duplicated text area: ${newArea.name}`)
+}, [selectedAreaId, nameAreas, addLog])
+
+const handleZoomIn = useCallback(() => {
+  setZoomLevel(prev => Math.min(prev + 0.1, 2.0)); // Max 200%
+}, []);
+
+const handleZoomOut = useCallback(() => {
+  setZoomLevel(prev => Math.max(prev - 0.1, 0.5)); // Min 50%
+}, []);
+
+const handleResetZoom = useCallback(() => {
+  setZoomLevel(1.0);
+}, []);
+
+useEffect(() => {
+  const link = document.createElement('link')
+  link.href = 'https://fonts.googleapis.com/css2?family=' + 
+    GOOGLE_FONTS.filter(font => !['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana'].includes(font))
+      .map(font => font.replace(/ /g, '+'))
+      .join('&family=') + 
+    '&display=swap'
+  link.rel = 'stylesheet'
+  document.head.appendChild(link)
+  
+  return () => {
+    if (document.head.contains(link)) {
+      document.head.removeChild(link)
     }
-  }, [templateImage, nameAreas, names, generateCertificate, addLog])
+  }
+}, [])
 
-  const deleteSelectedArea = useCallback(() => {
-    if (!selectedAreaId) return
-    
-    setNameAreas(prev => prev.filter(area => area.id !== selectedAreaId))
-    setSelectedAreaId(null)
-    addLog('info', 'Deleted selected text area')
-  }, [selectedAreaId, addLog])
-
-  const duplicateSelectedArea = useCallback(() => {
-    if (!selectedAreaId) return
-    
-    const selectedArea = nameAreas.find(area => area.id === selectedAreaId)
-    if (!selectedArea) return
-    
-    const newArea: NameArea = {
-      ...selectedArea,
-      id: Date.now().toString(),
-      name: `${selectedArea.name} Copy`,
-      x: selectedArea.x + 20,
-      y: selectedArea.y + 20
-    }
-    
-    setNameAreas(prev => [...prev, newArea])
-    setSelectedAreaId(newArea.id)
-    addLog('success', `Duplicated text area: ${newArea.name}`)
-  }, [selectedAreaId, nameAreas, addLog])
-
-  const handleZoomIn = useCallback(() => {
-    setZoomLevel(prev => Math.min(prev + 0.1, 2.0)); // Max 200%
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    setZoomLevel(prev => Math.max(prev - 0.1, 0.5)); // Min 50%
-  }, []);
-
-  const handleResetZoom = useCallback(() => {
-    setZoomLevel(1.0);
-  }, []);
-
-  useEffect(() => {
-    const link = document.createElement('link')
-    link.href = 'https://fonts.googleapis.com/css2?family=' + 
-      GOOGLE_FONTS.filter(font => !['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana'].includes(font))
-        .map(font => font.replace(/ /g, '+'))
-        .join('&family=') + 
-      '&display=swap'
-    link.rel = 'stylesheet'
-    document.head.appendChild(link)
-    
-    return () => {
-      if (document.head.contains(link)) {
-        document.head.removeChild(link)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    drawCanvas();
-  }, [drawCanvas]);
+useEffect(() => {
+  drawCanvas();
+}, [drawCanvas]);
 
 
-  useEffect(() => {
-    addLog('info', 'Certificate Generator initialized. Upload a template to get started!')
-  }, [addLog])
+useEffect(() => {
+  addLog('info', 'Certificate Generator initialized. Upload a template to get started!')
+}, [addLog])
 
-  const allAvailableFonts = [...GOOGLE_FONTS, ...customFonts];
+const allAvailableFonts = [...GOOGLE_FONTS, ...customFonts];
 
-  return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 lg:px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="lg:hidden text-white hover:bg-gray-700 transition-colors duration-200"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center shadow-md">
-                <FileImage className="w-5 h-5 text-white" />
-              </div>
-              <h1 className="text-lg lg:text-xl font-bold text-white">Lazy Certification</h1>
+return (
+  <div className="min-h-screen bg-gray-900 text-white flex flex-col">
+    {/* Header */}
+    <header className="bg-gray-800 border-b border-gray-700 px-4 lg:px-6 py-4 flex-shrink-0">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="lg:hidden text-white hover:bg-gray-700 transition-colors duration-200"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
+            <Menu className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center shadow-md">
+              <FileImage className="w-5 h-5 text-white" />
             </div>
-            <Badge variant="secondary" className="hidden sm:inline-flex bg-gray-700 text-gray-300 border-gray-600">v2.0</Badge>
+            <h1 className="text-lg lg:text-xl font-bold text-white">Lazy Certification</h1>
           </div>
-          <div className="flex items-center space-x-2 lg:space-x-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="lg:hidden text-white hover:bg-gray-700 transition-colors duration-200"
-              onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
+          <Badge variant="secondary" className="hidden sm:inline-flex bg-gray-700 text-gray-300 border-gray-600">v2.0</Badge>
+        </div>
+        <div className="flex items-center space-x-2 lg:space-x-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="lg:hidden text-white hover:bg-gray-700 transition-colors duration-200"
+            onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
+          >
+            <Settings className="w-5 h-5" />
+          </Button>
+          <div className="hidden sm:block text-xs lg:text-sm text-gray-300">
+            Made by{' '}
+            <a 
+              href="https://anishkumar.tech" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 font-medium inline-flex items-center transition-colors duration-200"
             >
-              <Settings className="w-5 h-5" />
-            </Button>
-            <div className="hidden sm:block text-xs lg:text-sm text-gray-300">
-              Made by{' '}
-              <a 
-                href="https://anishkumar.tech" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 font-medium inline-flex items-center transition-colors duration-200"
-              >
-                Anish Kumar
-                <ExternalLink className="w-3 h-3 ml-1" />
-              </a>
-            </div>
+              Anish Kumar
+              <ExternalLink className="w-3 h-3 ml-1" />
+            </a>
           </div>
         </div>
-      </header>
+      </div>
+    </header>
 
-      <div className="flex flex-1 overflow-hidden relative">
-        {/* Left Sidebar */}
-        <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:relative z-30 w-80 flex-shrink-0 bg-gray-800 border-r border-gray-700 flex flex-col transition-transform duration-300 ease-in-out`}>
-          <div className="flex items-center justify-between p-4 lg:hidden bg-gray-900 border-b border-gray-700">
-            <h2 className="text-lg font-semibold text-white">Controls</h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSidebarOpen(false)}
-              className="text-white hover:bg-gray-700 transition-colors duration-200"
-            >
-              <X className="w-5 h-5" />
-            </Button>
-          </div>
+    <div className="flex flex-1 overflow-hidden relative">
+      {/* Left Sidebar */}
+      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:relative z-30 w-80 flex-shrink-0 bg-gray-800 border-r border-gray-700 flex flex-col transition-transform duration-300 ease-in-out`}>
+        <div className="flex items-center justify-between p-4 lg:hidden bg-gray-900 border-b border-gray-700">
+          <h2 className="text-lg font-semibold text-white">Controls</h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSidebarOpen(false)}
+            className="text-white hover:bg-gray-700 transition-colors duration-200"
+          >
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+        
+        <Tabs defaultValue="setup" className="flex-1 flex flex-col">
+          <TabsList className="grid w-full grid-cols-3 bg-gray-900 rounded-none border-b border-gray-700">
+            <TabsTrigger value="setup" className="text-white data-[state=active]:bg-gray-700 data-[state=active]:text-white rounded-none hover:bg-gray-700/50 transition-colors duration-200">Setup</TabsTrigger>
+            <TabsTrigger value="style" className="text-white data-[state=active]:bg-gray-700 data-[state=active]:text-white rounded-none hover:bg-gray-700/50 transition-colors duration-200">Style</TabsTrigger>
+            <TabsTrigger value="logs" className="text-white data-[state=active]:bg-gray-700 data-[state=active]:text-white rounded-none hover:bg-gray-700/50 transition-colors duration-200">Logs</TabsTrigger>
+          </TabsList>
           
-          <Tabs defaultValue="setup" className="flex-1 flex flex-col">
-            <TabsList className="grid w-full grid-cols-3 bg-gray-900 rounded-none border-b border-gray-700">
-              <TabsTrigger value="setup" className="text-white data-[state=active]:bg-gray-700 data-[state=active]:text-white rounded-none hover:bg-gray-700/50 transition-colors duration-200">Setup</TabsTrigger>
-              <TabsTrigger value="style" className="text-white data-[state=active]:bg-gray-700 data-[state=active]:text-white rounded-none hover:bg-gray-700/50 transition-colors duration-200">Style</TabsTrigger>
-              <TabsTrigger value="logs" className="text-white data-[state=active]:bg-gray-700 data-[state=active]:text-white rounded-none hover:bg-gray-700/50 transition-colors duration-200">Logs</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="setup" className="flex-1 p-4 space-y-4 overflow-y-auto">
-              <ScrollArea className="h-full">
+          <TabsContent value="setup" className="flex-1 flex flex-col p-4"> {/* Added flex flex-col */}
+            <ScrollArea className="flex-1"> {/* Changed h-full to flex-1 */}
+              <div className="space-y-4 pb-4"> {/* Added pb-4 for scroll padding */}
                 {/* Template Upload */}
                 <Card className="bg-gray-700 border-gray-600 shadow-lg">
                   <CardHeader className="pb-3">
@@ -748,13 +973,19 @@ export default function CertificateGenerator() {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <Button
-                      onClick={() => setIsSelecting(true)}
+                      onClick={() => {
+                        if (isMobile) {
+                          addDefaultTextArea();
+                        } else {
+                          setIsSelecting(true);
+                        }
+                      }}
                       disabled={!templateImage}
                       className="w-full bg-purple-600 hover:bg-purple-700 text-white disabled:bg-gray-600 disabled:text-gray-400 transition-colors duration-200 transform hover:scale-[1.01]"
-                      variant={isSelecting ? "default" : "outline"}
+                      variant={isSelecting && !isMobile ? "default" : "outline"}
                     >
                       <Move className="w-4 h-4 mr-2" />
-                      {isSelecting ? 'Click & Drag on Canvas' : 'Add Text Area'}
+                      {isSelecting && !isMobile ? 'Click & Drag on Canvas' : 'Add Text Area'}
                     </Button>
                     
                     <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
@@ -769,7 +1000,15 @@ export default function CertificateGenerator() {
                           onClick={() => setSelectedAreaId(area.id)}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-white">{area.name}</span>
+                            <Input
+                              type="text"
+                              value={area.name}
+                              onChange={(e) => {
+                                const newName = e.target.value;
+                                setNameAreas(prev => prev.map(a => a.id === area.id ? { ...a, name: newName } : a));
+                              }}
+                              className="text-sm font-medium bg-transparent border-none p-0 h-auto focus:ring-0 focus:outline-none text-white"
+                            />
                             {selectedAreaId === area.id && (
                               <div className="flex space-x-1">
                                 <Button
@@ -797,6 +1036,70 @@ export default function CertificateGenerator() {
                               </div>
                             )}
                           </div>
+                          {selectedAreaId === area.id && (
+                            <div className="mt-2 space-y-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label htmlFor={`area-x-${area.id}`} className="text-xs text-gray-400">X</Label>
+                                  <Input
+                                    id={`area-x-${area.id}`}
+                                    type="number"
+                                    value={Math.round(area.x)}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value) || 0;
+                                      setNameAreas(prev => prev.map(a => a.id === area.id ? { ...a, x: val } : a));
+                                      drawCanvas();
+                                    }}
+                                    className="text-sm bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`area-y-${area.id}`} className="text-xs text-gray-400">Y</Label>
+                                  <Input
+                                    id={`area-y-${area.id}`}
+                                    type="number"
+                                    value={Math.round(area.y)}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value) || 0;
+                                      setNameAreas(prev => prev.map(a => a.id === area.id ? { ...a, y: val } : a));
+                                      drawCanvas();
+                                    }}
+                                    className="text-sm bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label htmlFor={`area-width-${area.id}`} className="text-xs text-gray-400">Width</Label>
+                                  <Input
+                                    id={`area-width-${area.id}`}
+                                    type="number"
+                                    value={Math.round(area.width)}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value) || 0;
+                                      setNameAreas(prev => prev.map(a => a.id === area.id ? { ...a, width: val } : a));
+                                      drawCanvas();
+                                    }}
+                                    className="text-sm bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`area-height-${area.id}`} className="text-xs text-gray-400">Height</Label>
+                                  <Input
+                                    id={`area-height-${area.id}`}
+                                    type="number"
+                                    value={Math.round(area.height)}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value) || 0;
+                                      setNameAreas(prev => prev.map(a => a.id === area.id ? { ...a, height: val } : a));
+                                      drawCanvas();
+                                    }}
+                                    className="text-sm bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                           <div className="text-xs text-gray-400 mt-1">
                             {Math.round(area.width)}×{Math.round(area.height)}px
                           </div>
@@ -850,454 +1153,463 @@ export default function CertificateGenerator() {
                     />
                   </CardContent>
                 </Card>
-              </ScrollArea>
-            </TabsContent>
-            
-            <TabsContent value="style" className="flex-1 p-4 overflow-y-auto">
-              <ScrollArea className="h-full">
-                <div className="space-y-4">
-                  {/* Preview Name */}
-                  <Card className="bg-gray-700 border-gray-600 shadow-lg">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm text-white">Preview</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+              </div>
+            </ScrollArea>
+          </TabsContent>
+          
+          <TabsContent value="style" className="flex-1 flex flex-col p-4"> {/* Added flex flex-col */}
+            <ScrollArea className="flex-1"> {/* Changed h-full to flex-1 */}
+              <div className="space-y-4 pb-4"> {/* Added pb-4 for scroll padding */}
+                {/* Preview Name */}
+                <Card className="bg-gray-700 border-gray-600 shadow-lg">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm text-white">Preview</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div>
+                      <Label htmlFor="preview-name" className="text-xs text-gray-300">Preview Name</Label>
+                      <Input
+                        id="preview-name"
+                        value={previewName}
+                        onChange={(e) => setPreviewName(e.target.value)}
+                        placeholder="Enter name for preview"
+                        className="text-sm bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Typography */}
+                <Card className="bg-gray-700 border-gray-600 shadow-lg">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2 text-white">
+                      <Type className="w-4 h-4 text-orange-400" />
+                      Typography
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label className="text-xs text-gray-300 font-medium">Font Family</Label>
+                      <Select value={textSettings.font} onValueChange={(value) => setTextSettings(prev => ({ ...prev, font: value }))}>
+                        <SelectTrigger className="text-sm bg-gray-800 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-800 border-gray-600">
+                          {allAvailableFonts.map(font => (
+                            <SelectItem key={font} value={font} className="text-white hover:bg-gray-700 focus:bg-gray-700 transition-colors duration-200" style={{ fontFamily: font }}>
+                              {font}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    {/* Custom Font Upload - Temporarily disabled
+                    <div className="space-y-3">
+                      <Label className="text-xs text-gray-300 font-medium">Upload Custom Font</Label>
+                      <Button
+                        onClick={() => fontInputRef.current?.click()}
+                        className="w-full bg-gray-600 hover:bg-gray-700 text-white transition-colors duration-200 transform hover:scale-[1.01]"
+                        variant="outline"
+                      >
+                        <PlusCircle className="w-4 h-4 mr-2" />
+                        Upload Font File
+                      </Button>
+                      <input
+                        ref={fontInputRef}
+                        type="file"
+                        accept=".ttf,.otf,.woff,.woff2"
+                        onChange={handleFontUpload}
+                        className="hidden"
+                      />
+                      {customFonts.length > 0 && (
+                        <div className="text-xs text-gray-400 bg-gray-800/30 p-2 rounded border border-gray-700">
+                          Loaded: {customFonts.join(', ')}
+                        </div>
+                      )}
+                    </div>
+                    */}
+
+                    <div>
+                      <Label className="text-xs text-gray-300 font-medium">Size: {textSettings.size}px</Label>
+                      <Slider
+                        value={[textSettings.size]}
+                        onValueChange={([value]) => setTextSettings(prev => ({ ...prev, size: value }))}
+                        min={12}
+                        max={200}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+                    
+                    <div className="space-y-4">
                       <div>
-                        <Label htmlFor="preview-name" className="text-xs text-gray-300">Preview Name</Label>
+                        <Label className="text-xs text-gray-300 font-medium mb-2 block">Color</Label>
                         <Input
-                          id="preview-name"
-                          value={previewName}
-                          onChange={(e) => setPreviewName(e.target.value)}
-                          placeholder="Enter name for preview"
-                          className="text-sm bg-gray-800 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                          type="color"
+                          value={textSettings.color}
+                          onChange={(e) => setTextSettings(prev => ({ ...prev, color: e.target.value }))}
+                          className="w-full h-10 bg-gray-800 border-gray-600 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
                         />
                       </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Typography */}
-                  <Card className="bg-gray-700 border-gray-600 shadow-lg">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm flex items-center gap-2 text-white">
-                        <Type className="w-4 h-4 text-orange-400" />
-                        Typography
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
                       <div>
-                        <Label className="text-xs text-gray-300 font-medium">Font Family</Label>
-                        <Select value={textSettings.font} onValueChange={(value) => setTextSettings(prev => ({ ...prev, font: value }))}>
-                          <SelectTrigger className="text-sm bg-gray-800 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-gray-800 border-gray-600">
-                            {allAvailableFonts.map(font => (
-                              <SelectItem key={font} value={font} className="text-white hover:bg-gray-700 focus:bg-gray-700 transition-colors duration-200" style={{ fontFamily: font }}>
-                                {font}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Label className="text-xs text-gray-300 font-medium mb-2 block">Alignment</Label>
+                        <div className="flex border border-gray-600 rounded bg-gray-800 overflow-hidden">
+                          <Button
+                            size="sm"
+                            variant={textSettings.align === 'left' ? 'default' : 'ghost'}
+                            onClick={() => setTextSettings(prev => ({ ...prev, align: 'left' }))}
+                            className="flex-1 rounded-none text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
+                          >
+                            <AlignLeft className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={textSettings.align === 'center' ? 'default' : 'ghost'}
+                            onClick={() => setTextSettings(prev => ({ ...prev, align: 'center' }))}
+                            className="flex-1 rounded-none border-x border-gray-600 text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
+                          >
+                            <AlignCenter className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={textSettings.align === 'right' ? 'default' : 'ghost'}
+                            onClick={() => setTextSettings(prev => ({ ...prev, align: 'right' }))}
+                            className="flex-1 rounded-none text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
+                          >
+                            <AlignRight className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
-                      
-                      {/* Custom Font Upload - Temporarily disabled
-                      <div className="space-y-3">
-                        <Label className="text-xs text-gray-300 font-medium">Upload Custom Font</Label>
-                        <Button
-                          onClick={() => fontInputRef.current?.click()}
-                          className="w-full bg-gray-600 hover:bg-gray-700 text-white transition-colors duration-200 transform hover:scale-[1.01]"
-                          variant="outline"
-                        >
-                          <PlusCircle className="w-4 h-4 mr-2" />
-                          Upload Font File
-                        </Button>
-                        <input
-                          ref={fontInputRef}
-                          type="file"
-                          accept=".ttf,.otf,.woff,.woff2"
-                          onChange={handleFontUpload}
-                          className="hidden"
-                        />
-                        {customFonts.length > 0 && (
-                          <div className="text-xs text-gray-400 bg-gray-800/30 p-2 rounded border border-gray-700">
-                            Loaded: {customFonts.join(', ')}
-                          </div>
-                        )}
-                      </div>
-                      */}
+                    </div>
 
-                      <div>
-                        <Label className="text-xs text-gray-300 font-medium">Size: {textSettings.size}px</Label>
-                        <Slider
-                          value={[textSettings.size]}
-                          onValueChange={([value]) => setTextSettings(prev => ({ ...prev, size: value }))}
-                          min={12}
-                          max={200}
-                          step={1}
-                          className="mt-2"
-                        />
+                    <div className="space-y-3">
+                      <Label className="text-xs text-gray-300 font-medium">Text Style</Label>
+                      <div className="grid grid-cols-1 gap-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm text-gray-300 flex items-center gap-2 cursor-pointer">
+                            <Bold className="w-4 h-4" />
+                            Bold
+                          </Label>
+                          <Switch
+                            checked={textSettings.bold}
+                            onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, bold: checked }))}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm text-gray-300 flex items-center gap-2 cursor-pointer">
+                            <Italic className="w-4 h-4" />
+                            Italic
+                          </Label>
+                          <Switch
+                            checked={textSettings.italic}
+                            onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, italic: checked }))}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm text-gray-300 flex items-center gap-2 cursor-pointer">
+                            <Underline className="w-4 h-4" />
+                            Underline
+                          </Label>
+                          <Switch
+                            checked={textSettings.underline}
+                            onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, underline: checked }))}
+                          />
+                        </div>
                       </div>
-                      
-                      <div className="space-y-4">
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Text Effects */}
+                <Card className="bg-gray-700 border-gray-600 shadow-lg">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2 text-white">
+                      <Palette className="w-4 h-4 text-pink-400" />
+                      Effects
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        checked={textSettings.shadow}
+                        onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, shadow: checked }))}
+                      />
+                      <Label className="text-xs text-gray-300 cursor-pointer">Text Shadow</Label>
+                    </div>
+                    
+                    {textSettings.shadow && (
+                      <div className="space-y-3 pl-4 border-l-2 border-gray-600">
                         <div>
-                          <Label className="text-xs text-gray-300 font-medium mb-2 block">Color</Label>
+                          <Label className="text-xs text-gray-300">Shadow Color</Label>
                           <Input
                             type="color"
-                            value={textSettings.color}
-                            onChange={(e) => setTextSettings(prev => ({ ...prev, color: e.target.value }))}
-                            className="w-full h-10 bg-gray-800 border-gray-600 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                            value={textSettings.shadowColor}
+                            onChange={(e) => setTextSettings(prev => ({ ...prev, shadowColor: e.target.value }))}
+                            className="h-8 bg-gray-800 border-gray-600 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-gray-300 font-medium mb-2 block">Alignment</Label>
-                          <div className="flex border border-gray-600 rounded bg-gray-800 overflow-hidden">
-                            <Button
-                              size="sm"
-                              variant={textSettings.align === 'left' ? 'default' : 'ghost'}
-                              onClick={() => setTextSettings(prev => ({ ...prev, align: 'left' }))}
-                              className="flex-1 rounded-none text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
-                            >
-                              <AlignLeft className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant={textSettings.align === 'center' ? 'default' : 'ghost'}
-                              onClick={() => setTextSettings(prev => ({ ...prev, align: 'center' }))}
-                              className="flex-1 rounded-none border-x border-gray-600 text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
-                            >
-                              <AlignCenter className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant={textSettings.align === 'right' ? 'default' : 'ghost'}
-                              onClick={() => setTextSettings(prev => ({ ...prev, align: 'right' }))}
-                              className="flex-1 rounded-none text-white hover:bg-gray-600 data-[state=active]:bg-blue-600 data-[state=active]:hover:bg-blue-700 transition-colors duration-200"
-                            >
-                              <AlignRight className="w-4 h-4" />
-                            </Button>
-                          </div>
+                          <Label className="text-xs text-gray-300">Blur: {textSettings.shadowBlur}px</Label>
+                          <Slider
+                            value={[textSettings.shadowBlur]}
+                            onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowBlur: value }))}
+                            min={0}
+                            max={20}
+                            step={1}
+                          />
                         </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label className="text-xs text-gray-300 font-medium">Text Style</Label>
-                        <div className="grid grid-cols-1 gap-3">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-sm text-gray-300 flex items-center gap-2 cursor-pointer">
-                              <Bold className="w-4 h-4" />
-                              Bold
-                            </Label>
-                            <Switch
-                              checked={textSettings.bold}
-                              onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, bold: checked }))}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <Label className="text-sm text-gray-300 flex items-center gap-2 cursor-pointer">
-                              <Italic className="w-4 h-4" />
-                              Italic
-                            </Label>
-                            <Switch
-                              checked={textSettings.italic}
-                              onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, italic: checked }))}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <Label className="text-sm text-gray-300 flex items-center gap-2 cursor-pointer">
-                              <Underline className="w-4 h-4" />
-                              Underline
-                            </Label>
-                            <Switch
-                              checked={textSettings.underline}
-                              onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, underline: checked }))}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Text Effects */}
-                  <Card className="bg-gray-700 border-gray-600 shadow-lg">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm flex items-center gap-2 text-white">
-                        <Palette className="w-4 h-4 text-pink-400" />
-                        Effects
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          checked={textSettings.shadow}
-                          onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, shadow: checked }))}
-                        />
-                        <Label className="text-xs text-gray-300 cursor-pointer">Text Shadow</Label>
-                      </div>
-                      
-                      {textSettings.shadow && (
-                        <div className="space-y-3 pl-4 border-l-2 border-gray-600">
+                        <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <Label className="text-xs text-gray-300">Shadow Color</Label>
-                            <Input
-                              type="color"
-                              value={textSettings.shadowColor}
-                              onChange={(e) => setTextSettings(prev => ({ ...prev, shadowColor: e.target.value }))}
-                              className="h-8 bg-gray-800 border-gray-600 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-gray-300">Blur: {textSettings.shadowBlur}px</Label>
+                            <Label className="text-xs text-gray-300">X: {textSettings.shadowOffsetX}px</Label>
                             <Slider
-                              value={[textSettings.shadowBlur]}
-                              onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowBlur: value }))}
-                              min={0}
-                              max={20}
+                              value={[textSettings.shadowOffsetX]}
+                              onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowOffsetX: value }))}
+                              min={-10}
+                              max={10}
                               step={1}
                             />
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <Label className="text-xs text-gray-300">X: {textSettings.shadowOffsetX}px</Label>
-                              <Slider
-                                value={[textSettings.shadowOffsetX]}
-                                onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowOffsetX: value }))}
-                                min={-10}
-                                max={10}
-                                step={1}
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs text-gray-300">Y: {textSettings.shadowOffsetY}px</Label>
-                              <Slider
-                                value={[textSettings.shadowOffsetY]}
-                                onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowOffsetY: value }))}
-                                min={-10}
-                                max={10}
-                                step={1}
-                              />
-                            </div>
+                          <div>
+                            <Label className="text-xs text-gray-300">Y: {textSettings.shadowOffsetY}px</Label>
+                            <Slider
+                              value={[textSettings.shadowOffsetY]}
+                              onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowOffsetY: value }))}
+                              min={-10}
+                              max={10}
+                              step={1}
+                            />
                           </div>
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-              </ScrollArea>
-            </TabsContent>
-            
-            <TabsContent value="logs" className="flex-1 p-4 overflow-y-auto">
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </ScrollArea>
+          </TabsContent>
+          
+          <TabsContent value="logs" className="flex-1 flex flex-col p-4"> {/* Added flex flex-col */}
+            <ScrollArea className="flex-1"> {/* Changed h-full to flex-1 */}
               <LogViewer logs={logs} />
-            </TabsContent>
-          </Tabs>
-        </div>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+      </div>
 
-        {/* Main Canvas Area */}
-        <div ref={mainContentRef} className="flex-1 flex flex-col min-w-0 bg-gray-900">
-          {/* Canvas Toolbar */}
-          <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
-            <div className="flex items-center space-x-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowGrid(!showGrid)}
-                className="border-gray-600 text-white hover:bg-gray-700 transition-colors duration-200"
-              >
-                <Grid className="w-4 h-4 mr-1" />
-                Grid
-              </Button>
-              <Separator orientation="vertical" className="h-6 bg-gray-600" />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleZoomOut}
-                className="border-gray-600 text-white hover:bg-gray-700 transition-colors duration-200"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </Button>
-              <span
-                className="text-sm text-gray-300 cursor-pointer"
-                onClick={handleResetZoom}
-                title="Reset Zoom"
-              >
-                {Math.round(zoomLevel * 100)}%
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleZoomIn}
-                className="border-gray-600 text-white hover:bg-gray-700 transition-colors duration-200"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </Button>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setIsSelecting(true)}
-                disabled={!templateImage}
-                className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 transition-colors duration-200"
-              >
-                <Move className="w-4 h-4 mr-1" />
-                <span className="hidden sm:inline">Add Area</span>
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={!selectedAreaId}
-                onClick={duplicateSelectedArea}
-                className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 transition-colors duration-200"
-              >
-                <Copy className="w-4 h-4 mr-1" />
-                <span className="hidden sm:inline">Duplicate</span>
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={!selectedAreaId}
-                onClick={deleteSelectedArea}
-                className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 transition-colors duration-200"
-              >
-                <Trash2 className="w-4 h-4 mr-1" />
-                <span className="hidden sm:inline">Delete</span>
-              </Button>
-            </div>
-          </div>
-
-          {/* Canvas */}
-          <div className="flex-1 p-4 lg:p-8 flex items-center justify-center overflow-auto">
-            {templateImage ? (
-              <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border border-gray-700 flex-shrink-0">
-                <canvas
-                  ref={canvasRef}
-                  onMouseDown={handleCanvasMouseDown}
-                  className="max-w-full h-auto border border-gray-600 rounded"
-                  style={{ cursor: isSelecting ? 'crosshair' : 'default' }}
-                />
-              </div>
-            ) : (
-              <div className="text-center text-gray-400">
-                <FileImage className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-                <h3 className="text-lg font-medium mb-2 text-white">No Template Loaded</h3>
-                <p className="text-sm">Upload a certificate template to get started</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Sidebar - Generation */}
-        <div className={`${rightSidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 fixed lg:relative z-20 right-0 w-80 flex-shrink-0 bg-gray-800 border-l border-gray-700 p-4 transition-transform duration-300 ease-in-out`}>
-          <div className="flex items-center justify-between mb-4 lg:hidden bg-gray-900 border-b border-gray-700 -mx-4 px-4 pt-4">
-            <h2 className="text-lg font-semibold text-white">Generate</h2>
+      {/* Main Canvas Area */}
+      <div ref={mainContentRef} className="flex-1 flex flex-col min-w-0 bg-gray-900">
+        {/* Canvas Toolbar */}
+        <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
+          <div className="flex items-center space-x-2">
             <Button
-              variant="ghost"
               size="sm"
-              onClick={() => setRightSidebarOpen(false)}
-              className="text-white hover:bg-gray-700 transition-colors duration-200"
+              variant="outline"
+              onClick={() => setShowGrid(!showGrid)}
+              className="border-gray-600 text-white hover:bg-gray-700 transition-colors duration-200"
             >
-              <X className="w-5 h-5" />
+              <Grid className="w-4 h-4 mr-1" />
+              Grid
+            </Button>
+            <Separator orientation="vertical" className="h-6 bg-gray-600" />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleZoomOut}
+              className="border-gray-600 text-white hover:bg-gray-700 transition-colors duration-200"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+            <span
+              className="text-sm text-gray-300 cursor-pointer"
+              onClick={handleResetZoom}
+              title="Reset Zoom"
+            >
+              {Math.round(zoomLevel * 100)}%
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleZoomIn}
+              className="border-gray-600 text-white hover:bg-gray-700 transition-colors duration-200"
+            >
+              <ZoomIn className="w-4 h-4" />
             </Button>
           </div>
           
-          <div className="space-y-4 overflow-y-auto h-full pb-4">
-            <Card className="bg-gray-700 border-gray-600 shadow-lg">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2 text-white">
-                  <Download className="w-4 h-4 text-green-400" />
-                  Generate Certificates
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-center">
-                  <div>
-                    <div className="text-2xl font-bold text-white">{names.length}</div>
-                    <div className="text-xs text-gray-400">Recipients</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-white">{nameAreas.length}</div>
-                    <div className="text-xs text-gray-400">Text Areas</div>
-                  </div>
-                </div>
-
-                {isGenerating && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs text-gray-300">
-                      <span>Generating...</span>
-                      <span>{Math.round(generationProgress)}%</span>
-                    </div>
-                    <Progress value={generationProgress} className="h-2" />
-                  </div>
-                )}
-
-                <Button
-                  onClick={generateAllCertificates}
-                  disabled={!templateImage || nameAreas.length === 0 || names.length === 0 || isGenerating}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-600 disabled:text-gray-400 transition-colors duration-200 transform hover:scale-[1.01]"
-                  size="lg"
-                >
-                  {isGenerating ? (
-                    <>Generating...</>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4 mr-2" />
-                      Generate & Download
-                    </>
-                  )}
-                </Button>
-
-                {(!templateImage || nameAreas.length === 0 || names.length === 0) && (
-                  <div className="text-xs text-gray-400 text-center space-y-1">
-                    {!templateImage && <div>• Upload a template</div>}
-                    {nameAreas.length === 0 && <div>• Add text areas</div>}
-                    {names.length === 0 && <div>• Add recipient names</div>}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Quick Stats */}
-            <Card className="bg-gray-700 border-gray-600 shadow-lg">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm text-white">Project Stats</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">Template Size:</span>
-                  <span className="text-white">{templateDimensions.width}×{templateDimensions.height}px</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">Text Areas:</span>
-                  <span className="text-white">{nameAreas.length}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">Recipients:</span>
-                  <span className="text-white">{names.length}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">Font:</span>
-                  <span className="text-white">{textSettings.font}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">Font Size:</span>
-                  <span className="text-white">{textSettings.size}px</span>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="flex items-center space-x-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (isMobile) {
+                  addDefaultTextArea();
+                } else {
+                  setIsSelecting(true);
+                }
+              }}
+              disabled={!templateImage}
+              className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 transition-colors duration-200"
+            >
+              <Move className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Add Area</span>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!selectedAreaId}
+              onClick={duplicateSelectedArea}
+              className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 transition-colors duration-200"
+            >
+              <Copy className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Duplicate</span>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!selectedAreaId}
+              onClick={deleteSelectedArea}
+              className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 transition-colors duration-200"
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Delete</span>
+            </Button>
           </div>
         </div>
 
-        {/* Mobile Overlay */}
-        {(sidebarOpen || rightSidebarOpen) && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-10 lg:hidden"
-            onClick={() => {
-              setSidebarOpen(false)
-              setRightSidebarOpen(false)
-            }}
-          />
-        )}
+        {/* Canvas */}
+        <div className="flex-1 p-4 lg:p-8 flex items-center justify-center overflow-auto">
+          {templateImage ? (
+            <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border border-gray-700 flex-shrink-0">
+              <canvas
+                ref={canvasRef}
+                onMouseDown={handleCanvasMouseDown}
+                className="max-w-full h-auto border border-gray-600 rounded"
+                style={{ cursor: isSelecting && !isMobile ? 'crosshair' : 'default' }}
+              />
+            </div>
+          ) : (
+            <div className="text-center text-gray-400">
+              <FileImage className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+              <h3 className="text-lg font-medium mb-2 text-white">No Template Loaded</h3>
+              <p className="text-sm">Upload a certificate template to get started</p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Right Sidebar - Generation */}
+      <div className={`${rightSidebarOpen ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 fixed lg:relative z-20 right-0 w-80 flex-shrink-0 bg-gray-800 border-l border-gray-700 p-4 transition-transform duration-300 ease-in-out`}>
+        <div className="flex items-center justify-between mb-4 lg:hidden bg-gray-900 border-b border-gray-700 -mx-4 px-4 pt-4">
+          <h2 className="text-lg font-semibold text-white">Generate</h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setRightSidebarOpen(false)}
+            className="text-white hover:bg-gray-700 transition-colors duration-200"
+          >
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+        
+        <div className="space-y-4 overflow-y-auto h-full pb-4">
+          <Card className="bg-gray-700 border-gray-600 shadow-lg">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2 text-white">
+                <Download className="w-4 h-4 text-green-400" />
+                Generate Certificates
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-white">{names.length}</div>
+                  <div className="text-xs text-gray-400">Recipients</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-white">{nameAreas.length}</div>
+                  <div className="text-xs text-gray-400">Text Areas</div>
+                </div>
+              </div>
+
+              {isGenerating && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-gray-300">
+                    <span>Generating...</span>
+                    <span>{Math.round(generationProgress)}%</span>
+                  </div>
+                  <Progress value={generationProgress} className="h-2" />
+                </div>
+              )}
+
+              <Button
+                onClick={generateAllCertificates}
+                disabled={!templateImage || nameAreas.length === 0 || names.length === 0 || isGenerating}
+                className="w-full bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-600 disabled:text-gray-400 transition-colors duration-200 transform hover:scale-[1.01]"
+                size="lg"
+              >
+                {isGenerating ? (
+                  <>Generating...</>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Generate & Download
+                  </>
+                )}
+              </Button>
+
+              {(!templateImage || nameAreas.length === 0 || names.length === 0) && (
+                <div className="text-xs text-gray-400 text-center space-y-1">
+                  {!templateImage && <div>• Upload a template</div>}
+                  {nameAreas.length === 0 && <div>• Add text areas</div>}
+                  {names.length === 0 && <div>• Add recipient names</div>}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Stats */}
+          <Card className="bg-gray-700 border-gray-600 shadow-lg">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm text-white">Project Stats</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400">Template Size:</span>
+                <span className="text-white">{templateDimensions.width}×{templateDimensions.height}px</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400">Text Areas:</span>
+                <span className="text-white">{nameAreas.length}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400">Recipients:</span>
+                <span className="text-white">{names.length}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400">Font:</span>
+                <span className="text-white">{textSettings.font}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400">Font Size:</span>
+                <span className="text-white">{textSettings.size}px</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Mobile Overlay */}
+      {(sidebarOpen || rightSidebarOpen) && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-10 lg:hidden"
+          onClick={() => {
+            setSidebarOpen(false)
+            setRightSidebarOpen(false)
+          }}
+        />
+      )}
     </div>
-  )
+  </div>
+)
 }
