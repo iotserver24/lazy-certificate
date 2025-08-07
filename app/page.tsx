@@ -769,7 +769,7 @@ export default function CertificateGenerator() {
                           onClick={() => setSelectedAreaId(area.id)}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-white"></span>
+                            <span className="text-sm font-medium text-white">{area.name}</span>
                             {selectedAreaId === area.id && (
                               <div className="flex space-x-1">
                                 <Button
