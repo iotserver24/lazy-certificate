@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 17 24 39;
+    --foreground: 249 250 251;
+    --card: 31 41 55;
+    --card-foreground: 249 250 251;
+    --popover: 31 41 55;
+    --popover-foreground: 249 250 251;
+    --primary: 59 130 246;
+    --primary-foreground: 249 250 251;
+    --secondary: 55 65 81;
+    --secondary-foreground: 249 250 251;
+    --muted: 55 65 81;
+    --muted-foreground: 156 163 175;
+    --accent: 55 65 81;
+    --accent-foreground: 249 250 251;
+    --destructive: 239 68 68;
+    --destructive-foreground: 249 250 251;
+    --border: 55 65 81;
+    --input: 55 65 81;
+    --ring: 59 130 246;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #6b7280;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Specific custom scrollbar for elements that need it */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #1f2937; /* Darker track for inner scroll areas */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #4b5563; /* Slightly lighter thumb */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+
+/* Ensure text is always visible */
+input, textarea, select {
+  color: white !important;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Fix for mobile touch targets */
+@media (max-width: 768px) {
+  button, input, select, textarea {
+    min-height: 44px;
+  }
+}
