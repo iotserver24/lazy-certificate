@@ -1222,7 +1222,7 @@ export default function CertificateGenerator() {
               This tool is optimized for desktop and laptop screens. Please open it on a device with a larger display to continue.
             </p>
             <div className="text-xs text-gray-400">
-              Tip: You can also try rotating your tablet to landscape and using a browser in desktop mode.
+              note: If you would like to use desktop mode in mobile, the website is not yet capable with mobile and you will have issues with making certificates so i request you to use laptop/pc or in mobile with a mouseobile and you will have issues with making certificates so i request
             </div>
           </CardContent>
         </Card>
