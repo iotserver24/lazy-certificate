@@ -95,6 +95,25 @@ export default function CertificateGenerator() {
   const [zoomLevel, setZoomLevel] = useState(1.0)
   const [isDesktop, setIsDesktop] = useState(true)
 
+  const getIsBlockedMobile = () => {
+    if (typeof window === 'undefined') return false
+    const ua = navigator.userAgent || navigator.vendor || (window as any).opera || ''
+    const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua)
+    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    const smallViewport = window.innerWidth < 1024
+    // Block if mobile UA, or small screen, or touch device with smaller viewport
+    return isMobileUA || smallViewport || (hasTouch && window.innerWidth < 1280)
+  }
+
+  const [isBlockedMobile, setIsBlockedMobile] = useState<boolean>(() => getIsBlockedMobile())
+
+  useEffect(() => {
+    const handle = () => setIsBlockedMobile(getIsBlockedMobile())
+    handle()
+    window.addEventListener('resize', handle)
+    return () => window.removeEventListener('resize', handle)
+  }, [])
+
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const csvInputRef = useRef<HTMLInputElement>(null)
@@ -1208,6 +1227,24 @@ export default function CertificateGenerator() {
       </div>
     </div>
   )
+
+  if (isBlockedMobile) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-6">
+        <div className="max-w-md w-full">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 shadow-xl">
+            <h1 className="text-xl font-semibold mb-2">Desktop Only</h1>
+            <p className="text-sm text-gray-300">
+              This tool is not compatible with mobile or small screens. Please use a desktop or laptop device to continue.
+            </p>
+            <div className="mt-4 text-xs text-gray-400">
+              Tip: Open this page on your computer for the best experience.
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   // Desktop-only gate
   if (!isDesktop) {
