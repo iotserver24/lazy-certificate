@@ -1,30 +1,58 @@
-# Certificate generator tool
+# Lazy Certification
 
-*Automatically synced with your [v0.dev](https://v0.dev) deployments*
+Lazy Certification is an open-source web application that helps you generate professional certificates in bulk. Upload your own template, configure text placeholders, import recipient data, and export ready-to-use PDFs — all from your browser.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/r3ap3redit/v0-certificate-generator-tool)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/arFpReHNReQ)
+## Features
 
-## Overview
+- Upload any image or PDF certificate template
+- Visually position and style text fields
+- Import recipients from CSV/Excel
+- Preview certificates before exporting
+- Export a single PDF or a ZIP archive containing all PDFs
+- Works entirely in the browser – no server required
 
-This repository will stay in sync with your deployed chats on [v0.dev](https://v0.dev).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
+## Tech Stack
+
+- Next.js 15 (App Router)
+- React 19
+- TypeScript
+- Tailwind CSS 3
+- Radix UI & shadcn/ui primitives
+
+## Getting Started
+
+1. Install dependencies
+
+```bash
+pnpm install
+# or
+yarn install
+# or
+npm install
+```
+
+2. Run the development server
+
+```bash
+pnpm dev
+# or
+yarn dev
+# or
+npm run dev
+```
+
+Visit <http://localhost:3000> in your browser to start using the app.
 
 ## Deployment
 
-Your project is live at:
+This project can be deployed to any platform that supports Node.js. For one-click deployment to Vercel, click the button below:
 
-**[https://vercel.com/r3ap3redit/v0-certificate-generator-tool](https://vercel.com/r3ap3redit/v0-certificate-generator-tool)**
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/your-username/lazy-certification)
 
-## Build your app
+## Contributing
 
-Continue building your app on:
+Contributions are welcome! Please open an issue or submit a pull request with improvements or new features.
 
-**[https://v0.dev/chat/projects/arFpReHNReQ](https://v0.dev/chat/projects/arFpReHNReQ)**
+## License
 
-## How It Works
-
-1. Create and modify your project using [v0.dev](https://v0.dev)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
