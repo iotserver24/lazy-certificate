@@ -6,11 +6,9 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Lazy Certification',
   description: 'Generate professional certificates effortlessly with Lazy Certification. Upload templates, add recipient names, customize text, and batch generate certificates for your team or event.',
-  generator: 'v0.dev',
   openGraph: {
     title: 'Lazy Certification - Effortless Certificate Generation',
     description: 'Generate professional certificates effortlessly with Lazy Certification. Upload templates, add recipient names, customize text, and batch generate certificates for your team or event.',
-    url: 'https://lazycertification.vercel.app', // Replace with your actual deployment URL
     siteName: 'Lazy Certification',
     images: [
       {
