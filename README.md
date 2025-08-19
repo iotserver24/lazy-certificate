@@ -28,28 +28,28 @@ A powerful and intuitive web-based certificate generator that allows you to crea
 ### Installation
 
 1. **Clone the repository**
-   ```bash
+   \`\`\`bash
    git clone <repository-url>
    cd certificate-generator
-   ```
+   \`\`\`
 
 2. **Install dependencies**
-   ```bash
+   \`\`\`bash
    npm install
    # or
    yarn install
    # or
    pnpm install
-   ```
+   \`\`\`
 
 3. **Run the development server**
-   ```bash
+   \`\`\`bash
    npm run dev
    # or
    yarn dev
    # or
    pnpm dev
-   ```
+   \`\`\`
 
 4. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
@@ -66,11 +66,11 @@ A powerful and intuitive web-based certificate generator that allows you to crea
 ### CSV Format
 
 For bulk name import, use a CSV file with names in the first column:
-```csv
+\`\`\`csv
 John Doe
 Jane Smith
 Bob Johnson
-```
+\`\`\`
 
 ### Supported Fonts
 
@@ -88,7 +88,7 @@ Bob Johnson
 
 ## 🏗️ Project Structure
 
-```
+\`\`\`
 ├── app/
 │   ├── layout.tsx          # Root layout with metadata
 │   ├── page.tsx            # Main certificate generator component
@@ -99,7 +99,7 @@ Bob Johnson
 ├── lib/
 │   └── utils.ts            # Utility functions
 └── public/                 # Static assets
-```
+\`\`\`
 
 ## 🔧 Configuration
 

@@ -1,29 +1,52 @@
-'use client'
+"use client"
 
-import { useState, useRef, useCallback, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Slider } from '@/components/ui/slider'
-import { Switch } from '@/components/ui/switch'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
-import { Upload, Download, FileImage, Users, Palette, Type, Trash2, Copy, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Layers, Move, ZoomIn, ZoomOut, Grid, ExternalLink } from 'lucide-react'
-import JSZip from 'jszip'
-import LogViewer from '@/components/log-viewer'
-import { cn } from '@/lib/utils'
+import type React from "react"
+
+import { useState, useRef, useCallback, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
+import { Switch } from "@/components/ui/switch"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import {
+  Upload,
+  Download,
+  FileImage,
+  Users,
+  Palette,
+  Type,
+  Trash2,
+  Copy,
+  Bold,
+  Italic,
+  Underline,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Layers,
+  Move,
+  ZoomIn,
+  ZoomOut,
+  Grid,
+  ExternalLink,
+} from "lucide-react"
+import JSZip from "jszip"
+import LogViewer from "@/components/log-viewer"
+import { cn } from "@/lib/utils"
 
 interface TextSettings {
   font: string
   size: number
   color: string
-  align: 'left' | 'center' | 'right'
+  align: "left" | "center" | "right"
   bold: boolean
   italic: false
   underline: boolean
@@ -43,22 +66,47 @@ interface NameArea {
   height: number
   id: string
   name: string
+  content: string // Add this field for the actual text content
 }
 
 export interface LogEntry {
   id: string
-  type: 'info' | 'success' | 'warning' | 'error'
+  type: "info" | "success" | "warning" | "error"
   message: string
   timestamp: Date
 }
 
 const GOOGLE_FONTS = [
-  'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana',
-  'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Source Sans Pro',
-  'Raleway', 'Poppins', 'Nunito', 'Playfair Display', 'Merriweather',
-  'Oswald', 'Ubuntu', 'Libre Baskerville', 'Crimson Text', 'Lora',
-  'PT Sans', 'Droid Sans', 'Noto Sans', 'Fira Sans', 'Work Sans',
-  'Inter', 'Rubik', 'Karla', 'Barlow', 'DM Sans'
+  "Arial",
+  "Helvetica",
+  "Times New Roman",
+  "Georgia",
+  "Verdana",
+  "Roboto",
+  "Open Sans",
+  "Lato",
+  "Montserrat",
+  "Source Sans Pro",
+  "Raleway",
+  "Poppins",
+  "Nunito",
+  "Playfair Display",
+  "Merriweather",
+  "Oswald",
+  "Ubuntu",
+  "Libre Baskerville",
+  "Crimson Text",
+  "Lora",
+  "PT Sans",
+  "Droid Sans",
+  "Noto Sans",
+  "Fira Sans",
+  "Work Sans",
+  "Inter",
+  "Rubik",
+  "Karla",
+  "Barlow",
+  "DM Sans",
 ]
 
 export default function CertificateGenerator() {
@@ -66,25 +114,25 @@ export default function CertificateGenerator() {
   const [nameAreas, setNameAreas] = useState<NameArea[]>([])
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null)
   const [textSettings, setTextSettings] = useState<TextSettings>({
-    font: 'Montserrat',
+    font: "Montserrat",
     size: 48,
-    color: '#ffffff',
-    align: 'center',
+    color: "#ffffff",
+    align: "center",
     bold: false,
     italic: false,
     underline: false,
     shadow: true,
-    shadowColor: '#000000',
+    shadowColor: "#000000",
     shadowBlur: 4,
     shadowOffsetX: 2,
     shadowOffsetY: 2,
     letterSpacing: 0,
-    lineHeight: 1.2
+    lineHeight: 1.2,
   })
-  const [names, setNames] = useState<string[]>([])
-  const [nameInput, setNameInput] = useState('')
+  const [recipientData, setRecipientData] = useState<string[][]>([]) // Change from names array to 2D array
+  const [dataInput, setDataInput] = useState("") // Change from nameInput
   const [isSelecting, setIsSelecting] = useState(false)
-  const [previewName, setPreviewName] = useState('John Doe')
+  const [previewName, setPreviewName] = useState("John Doe")
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState(0)
   const [logs, setLogs] = useState<LogEntry[]>([])
@@ -96,10 +144,10 @@ export default function CertificateGenerator() {
   const [isDesktop, setIsDesktop] = useState(true)
 
   const getIsBlockedMobile = () => {
-    if (typeof window === 'undefined') return false
-    const ua = navigator.userAgent || navigator.vendor || (window as any).opera || ''
+    if (typeof window === "undefined") return false
+    const ua = navigator.userAgent || navigator.vendor || (window as any).opera || ""
     const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua)
-    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    const hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0
     const smallViewport = window.innerWidth < 1024
     // Block if mobile UA, or small screen, or touch device with smaller viewport
     return isMobileUA || smallViewport || (hasTouch && window.innerWidth < 1280)
@@ -110,8 +158,8 @@ export default function CertificateGenerator() {
   useEffect(() => {
     const handle = () => setIsBlockedMobile(getIsBlockedMobile())
     handle()
-    window.addEventListener('resize', handle)
-    return () => window.removeEventListener('resize', handle)
+    window.addEventListener("resize", handle)
+    return () => window.removeEventListener("resize", handle)
   }, [])
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -124,23 +172,23 @@ export default function CertificateGenerator() {
     // Gate: desktop/laptop only (>= 1024px)
     const check = () => setIsDesktop(window.innerWidth >= 1024)
     check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
   }, [])
 
-  const addLog = useCallback((type: LogEntry['type'], message: string) => {
+  const addLog = useCallback((type: LogEntry["type"], message: string) => {
     const newLog: LogEntry = {
       id: Date.now().toString(),
       type,
       message,
-      timestamp: new Date()
+      timestamp: new Date(),
     }
-    setLogs(prev => [newLog, ...prev.slice(0, 49)])
+    setLogs((prev) => [newLog, ...prev.slice(0, 49)])
   }, [])
 
   const addDefaultTextArea = useCallback(() => {
     if (!templateImage) {
-      addLog('error', 'Please upload a template image first to add a text area.')
+      addLog("error", "Please upload a template image first to add a text area.")
       return
     }
     const defaultWidth = Math.min(templateDimensions.width * 0.8, 400)
@@ -151,15 +199,16 @@ export default function CertificateGenerator() {
     const newArea: NameArea = {
       id: Date.now().toString(),
       name: `Text Area ${nameAreas.length + 1}`,
+      content: `Column ${nameAreas.length + 1}`, // Default content
       x: defaultX,
       y: defaultY,
       width: defaultWidth,
       height: defaultHeight,
     }
 
-    setNameAreas(prev => [...prev, newArea])
+    setNameAreas((prev) => [...prev, newArea])
     setSelectedAreaId(newArea.id)
-    addLog('success', `Added new text area: ${newArea.name}`)
+    addLog("success", `Added new text area: ${newArea.name}`)
   }, [templateImage, templateDimensions, nameAreas.length, addLog])
 
   const drawCanvas = useCallback(() => {
@@ -167,18 +216,18 @@ export default function CertificateGenerator() {
     const mainContent = mainContentRef.current
     if (!canvas || !templateImage || !mainContent) return
 
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext("2d")
     if (!ctx) return
 
     const img = new Image()
-    img.crossOrigin = 'anonymous'
+    img.crossOrigin = "anonymous"
     img.onload = () => {
       const toolbarHeight = 56
       const padding = 32
-      const availableWidth = mainContent.offsetWidth - (padding * 2)
-      const availableHeight = mainContent.offsetHeight - (padding * 2) - toolbarHeight
+      const availableWidth = mainContent.offsetWidth - padding * 2
+      const availableHeight = mainContent.offsetHeight - padding * 2 - toolbarHeight
 
-      let { width: originalWidth, height: originalHeight } = img
+      const { width: originalWidth, height: originalHeight } = img
       let baseScale = 1
 
       if (originalWidth > availableWidth || originalHeight > availableHeight) {
@@ -186,18 +235,18 @@ export default function CertificateGenerator() {
         const heightRatio = availableHeight / originalHeight
         baseScale = Math.min(widthRatio, heightRatio)
       }
-      
+
       const effectiveScale = baseScale * zoomLevel
-      
+
       canvas.width = originalWidth * effectiveScale
       canvas.height = originalHeight * effectiveScale
       setCanvasScale(effectiveScale)
 
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      
+
       if (showGrid) {
-        ctx.strokeStyle = '#374151'
+        ctx.strokeStyle = "#374151"
         ctx.lineWidth = 1
         ctx.setLineDash([2, 2])
         const gridSize = 20 * effectiveScale
@@ -214,470 +263,517 @@ export default function CertificateGenerator() {
           ctx.stroke()
         }
       }
-      
-      nameAreas.forEach(area => {
+
+      nameAreas.forEach((area, areaIndex) => {
         const scaledArea = {
           x: area.x * effectiveScale,
           y: area.y * effectiveScale,
           width: area.width * effectiveScale,
-          height: area.height * effectiveScale
+          height: area.height * effectiveScale,
         }
-        
-        ctx.strokeStyle = area.id === selectedAreaId ? '#3b82f6' : '#10b981'
+
+        ctx.strokeStyle = area.id === selectedAreaId ? "#3b82f6" : "#10b981"
         ctx.lineWidth = 2
         ctx.setLineDash([5, 5])
         ctx.strokeRect(scaledArea.x, scaledArea.y, scaledArea.width, scaledArea.height)
-        
-        ctx.fillStyle = area.id === selectedAreaId ? '#3b82f6' : '#10b981'
-        ctx.font = 'bold 12px Inter'
-        ctx.textAlign = 'left'
+
+        ctx.fillStyle = area.id === selectedAreaId ? "#3b82f6" : "#10b981"
+        ctx.font = "bold 12px Inter"
+        ctx.textAlign = "left"
         ctx.setLineDash([])
         ctx.fillText(area.name, scaledArea.x, scaledArea.y - 5)
-        
+
         ctx.fillStyle = textSettings.color
-        let fontStyle = ''
-        if (textSettings.bold) fontStyle += 'bold '
-        if (textSettings.italic) fontStyle += 'italic '
+        let fontStyle = ""
+        if (textSettings.bold) fontStyle += "bold "
+        if (textSettings.italic) fontStyle += "italic "
         ctx.font = `${fontStyle}${textSettings.size * effectiveScale}px ${textSettings.font}`
         ctx.textAlign = textSettings.align
-        
+
         if (textSettings.shadow) {
           ctx.shadowColor = textSettings.shadowColor
           ctx.shadowBlur = textSettings.shadowBlur * effectiveScale
           ctx.shadowOffsetX = textSettings.shadowOffsetX * effectiveScale
           ctx.shadowOffsetY = textSettings.shadowOffsetY * effectiveScale
         } else {
-          ctx.shadowColor = 'transparent'
+          ctx.shadowColor = "transparent"
           ctx.shadowBlur = 0
           ctx.shadowOffsetX = 0
           ctx.shadowOffsetY = 0
         }
-        
+
         let textX = scaledArea.x
-        if (textSettings.align === 'center') {
+        if (textSettings.align === "center") {
           textX = scaledArea.x + scaledArea.width / 2
-        } else if (textSettings.align === 'right') {
+        } else if (textSettings.align === "right") {
           textX = scaledArea.x + scaledArea.width
         }
-        
+
         const textY = scaledArea.y + scaledArea.height / 2 + (textSettings.size * effectiveScale) / 3
-        
+
         if (textSettings.underline) {
           const metrics = ctx.measureText(previewName)
           const underlineY = textY + 4
           ctx.beginPath()
           let underlineX = textX
-          let underlineWidth = metrics.width
-          
-          if (textSettings.align === 'center') {
+          const underlineWidth = metrics.width
+
+          if (textSettings.align === "center") {
             underlineX = textX - metrics.width / 2
-          } else if (textSettings.align === 'right') {
+          } else if (textSettings.align === "right") {
             underlineX = textX - metrics.width
           }
-          
+
           ctx.moveTo(underlineX, underlineY)
           ctx.lineTo(underlineX + underlineWidth, underlineY)
           ctx.strokeStyle = textSettings.color
           ctx.lineWidth = 2
           ctx.stroke()
         }
-        
-        ctx.fillText(previewName, textX, textY)
+
+        // Get content for this area from the first row of data, or use area.content as fallback
+        const displayText =
+          recipientData.length > 0 && recipientData[0] && recipientData[0][areaIndex]
+            ? recipientData[0][areaIndex]
+            : area.content || previewName
+
+        ctx.fillText(displayText, textX, textY)
       })
     }
     img.src = templateImage
-  }, [templateImage, nameAreas, selectedAreaId, textSettings, previewName, showGrid, zoomLevel])
+  }, [templateImage, nameAreas, selectedAreaId, textSettings, previewName, showGrid, zoomLevel, recipientData])
 
-  const handleImageUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+  const handleImageUpload = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      if (!file) return
 
-    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
-      addLog('error', 'Please upload a PNG or JPEG image file')
-      return
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      addLog('error', 'Image file is too large. Please use an image smaller than 10MB')
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const img = new Image()
-      img.onload = () => {
-        setTemplateDimensions({ width: img.width, height: img.height })
-        setTemplateImage(e.target?.result as string)
-        setNameAreas([])
-        setSelectedAreaId(null)
-        addLog('success', `Template uploaded successfully (${img.width}x${img.height}px)`)
-        drawCanvas()
+      if (!["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+        addLog("error", "Please upload a PNG or JPEG image file")
+        return
       }
-      img.onerror = () => {
-        addLog('error', 'Failed to load the uploaded image')
+
+      if (file.size > 10 * 1024 * 1024) {
+        addLog("error", "Image file is too large. Please use an image smaller than 10MB")
+        return
       }
-      img.src = e.target?.result as string
-    }
-    reader.onerror = () => {
-      addLog('error', 'Failed to read the uploaded file')
-    }
-    reader.readAsDataURL(file)
-  }, [addLog, drawCanvas])
 
-  const handleCSVUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-      addLog('error', 'Please upload a valid CSV file')
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        const csv = e.target?.result as string
-        const lines = csv.split('\n').filter(line => line.trim())
-        const nameList = lines.map(line => {
-          const columns = line.split(',')
-          return columns[0].trim().replace(/"/g, '')
-        }).filter(name => name && name.length > 0)
-        
-        if (nameList.length === 0) {
-          addLog('warning', 'No valid names found in the CSV file')
-          return
-        }
-
-        setNames(nameList)
-        setNameInput(nameList.join('\n'))
-        addLog('success', `Loaded ${nameList.length} names from CSV file`)
-      } catch (error) {
-        addLog('error', 'Failed to parse CSV file. Please check the format')
-      }
-    }
-    reader.onerror = () => {
-      addLog('error', 'Failed to read the CSV file')
-    }
-    reader.readAsText(file)
-  }, [addLog])
-
-  const handleFontUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    const allowedTypes = ['font/ttf', 'font/otf', 'font/woff', 'font/woff2']
-    if (!allowedTypes.includes(file.type) && !/\.(ttf|otf|woff|woff2)$/i.test(file.name)) {
-      addLog('error', 'Please upload a valid font file (.ttf, .otf, .woff, .woff2)')
-      return
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      addLog('error', 'Font file is too large. Please use a font smaller than 5MB')
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        const fontName = file.name.split('.').slice(0, -1).join('.')
-        const fontUrl = e.target?.result as string
-
-        const fontFace = new FontFace(fontName, `url(${fontUrl})`)
-
-        document.fonts.add(fontFace)
-        fontFace.load().then(() => {
-          setCustomFonts(prev => {
-            if (!prev.includes(fontName)) {
-              addLog('success', `Custom font "${fontName}" loaded successfully!`)
-              return [...prev, fontName]
-            }
-            addLog('info', `Font "${fontName}" was already loaded.`)
-            return prev
-          })
-          drawCanvas()
-        }).catch(error => {
-          addLog('error', `Failed to load custom font "${fontName}": ${error.message}`)
-        })
-      } catch (error) {
-        addLog('error', `Failed to process font file: ${error}`)
-      }
-    }
-    reader.onerror = () => {
-      addLog('error', 'Failed to read the font file')
-    }
-    reader.readAsDataURL(file)
-  }, [addLog, drawCanvas])
-
-  const parseNamesFromText = useCallback((text: string) => {
-    try {
-      const nameList = text.split('\n')
-        .map(name => name.trim())
-        .filter(name => name && name.length > 0)
-      
-      setNames(nameList)
-      if (nameList.length > 0) {
-        addLog('info', `Parsed ${nameList.length} names from input`)
-      }
-    } catch {
-      addLog('error', 'Failed to parse names from text input')
-    }
-  }, [addLog])
-
-  const handleCanvasMouseDown = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!templateImage) return
-    
-    const canvas = canvasRef.current
-    if (!canvas) return
-    
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
-    
-    const mouseX = (event.clientX - rect.left) * scaleX
-    const mouseY = (event.clientY - rect.top) * scaleY
-    
-    const effectiveScale = canvasScale
-    const toOriginalCoords = (val: number) => val / effectiveScale
-
-    // Drag selected area
-    if (selectedAreaId) {
-      const selectedArea = nameAreas.find(a => a.id === selectedAreaId)
-      if (selectedArea) {
-        const scaledArea = {
-          x: selectedArea.x * effectiveScale,
-          y: selectedArea.y * effectiveScale,
-          width: selectedArea.width * effectiveScale,
-          height: selectedArea.height * effectiveScale
-        }
-
-        const inside =
-          mouseX >= scaledArea.x && mouseX <= scaledArea.x + scaledArea.width &&
-          mouseY >= scaledArea.y && mouseY <= scaledArea.y + scaledArea.height
-
-        if (inside) {
-          const startX = toOriginalCoords(mouseX)
-          const startY = toOriginalCoords(mouseY)
-          const original = { ...selectedArea }
-
-          const onMove = (e: MouseEvent) => {
-            const currX = toOriginalCoords((e.clientX - rect.left) * scaleX)
-            const currY = toOriginalCoords((e.clientY - rect.top) * scaleY)
-            const dx = currX - startX
-            const dy = currY - startY
-
-            setNameAreas(prev => prev.map(a =>
-              a.id === selectedAreaId ? { ...a, x: original.x + dx, y: original.y + dy } : a
-            ))
-          }
-          const onUp = () => {
-            document.removeEventListener('mousemove', onMove)
-            document.removeEventListener('mouseup', onUp)
-            addLog('info', `Moved text area: ${selectedArea.name}`)
-          }
-          document.addEventListener('mousemove', onMove)
-          document.addEventListener('mouseup', onUp)
-          return
-        }
-      }
-    }
-
-    // Draw new area
-    if (isSelecting) {
-      const startX = toOriginalCoords(mouseX)
-      const startY = toOriginalCoords(mouseY)
-      let drawing = true
-
-      const onMove = (e: MouseEvent) => {
-        if (!drawing) return
-        const currX = toOriginalCoords((e.clientX - rect.left) * scaleX)
-        const currY = toOriginalCoords((e.clientY - rect.top) * scaleY)
-
-        const width = Math.abs(currX - startX)
-        const height = Math.abs(currY - startY)
-        const x = Math.min(startX, currX)
-        const y = Math.min(startY, currY)
-
-        const temp: NameArea = { id: 'temp', name: 'New Area', x, y, width, height }
-        setNameAreas(prev => [...prev.filter(a => a.id !== 'temp'), temp])
-      }
-      const onUp = () => {
-        drawing = false
-        setIsSelecting(false)
-        setNameAreas(prev => {
-          const t = prev.find(a => a.id === 'temp')
-          if (t && t.width > 10 && t.height > 10) {
-            const newArea: NameArea = {
-              ...t,
-              id: Date.now().toString(),
-              name: `Text Area ${prev.filter(a => a.id !== 'temp').length + 1}`
-            }
-            setSelectedAreaId(newArea.id)
-            addLog('success', `Created new text area: ${newArea.name}`)
-            return [...prev.filter(a => a.id !== 'temp'), newArea]
-          }
-          return prev.filter(a => a.id !== 'temp')
-        })
-        document.removeEventListener('mousemove', onMove)
-        document.removeEventListener('mouseup', onUp)
-      }
-      document.addEventListener('mousemove', onMove)
-      document.addEventListener('mouseup', onUp)
-      return
-    }
-
-    // Deselect if clicked empty
-    setSelectedAreaId(null)
-  }, [templateImage, nameAreas, selectedAreaId, canvasScale, isSelecting, addLog])
-
-  const generateCertificate = useCallback((name: string): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      try {
-        const canvas = document.createElement('canvas')
-        const ctx = canvas.getContext('2d')
-        if (!ctx || !templateImage) {
-          reject(new Error('Canvas context not available'))
-          return
-        }
-        
+      const reader = new FileReader()
+      reader.onload = (e) => {
         const img = new Image()
-        img.crossOrigin = 'anonymous'
         img.onload = () => {
-          try {
-            canvas.width = img.width
-            canvas.height = img.height
-            ctx.drawImage(img, 0, 0)
-            
-            nameAreas.forEach(area => {
-              ctx.fillStyle = textSettings.color
-              let fontStyle = ''
-              if (textSettings.bold) fontStyle += 'bold '
-              if (textSettings.italic) fontStyle += 'italic '
-              ctx.font = `${fontStyle}${textSettings.size}px ${textSettings.font}`
-              ctx.textAlign = textSettings.align
-              
-              if (textSettings.shadow) {
-                ctx.shadowColor = textSettings.shadowColor
-                ctx.shadowBlur = textSettings.shadowBlur
-                ctx.shadowOffsetX = textSettings.shadowOffsetX
-                ctx.shadowOffsetY = textSettings.shadowOffsetY
-              } else {
-                ctx.shadowBlur = 0
-                ctx.shadowOffsetX = 0
-                ctx.shadowOffsetY = 0
-              }
-              
-              let textX = area.x
-              if (textSettings.align === 'center') textX = area.x + area.width / 2
-              else if (textSettings.align === 'right') textX = area.x + area.width
-              const textY = area.y + area.height / 2 + textSettings.size / 3
-              
-              if (textSettings.underline) {
-                const m = ctx.measureText(name)
-                const underlineY = textY + 4
-                ctx.beginPath()
-                let underlineX = textX
-                if (textSettings.align === 'center') underlineX = textX - m.width / 2
-                else if (textSettings.align === 'right') underlineX = textX - m.width
-                ctx.moveTo(underlineX, underlineY)
-                ctx.lineTo(underlineX + m.width, underlineY)
-                ctx.strokeStyle = textSettings.color
-                ctx.lineWidth = 2
-                ctx.stroke()
-              }
-              ctx.fillText(name, textX, textY)
+          setTemplateDimensions({ width: img.width, height: img.height })
+          setTemplateImage(e.target?.result as string)
+          setNameAreas([])
+          setSelectedAreaId(null)
+          addLog("success", `Template uploaded successfully (${img.width}x${img.height}px)`)
+          drawCanvas()
+        }
+        img.onerror = () => {
+          addLog("error", "Failed to load the uploaded image")
+        }
+        img.src = e.target?.result as string
+      }
+      reader.onerror = () => {
+        addLog("error", "Failed to read the uploaded file")
+      }
+      reader.readAsDataURL(file)
+    },
+    [addLog, drawCanvas],
+  )
+
+  const handleCSVUpload = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      if (!file) return
+
+      if (file.type !== "text/csv" && !file.name.endsWith(".csv")) {
+        addLog("error", "Please upload a valid CSV file")
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const csv = e.target?.result as string
+          const lines = csv.split("\n").filter((line) => line.trim())
+          const data = lines
+            .map((line) => {
+              return line.split(",").map((cell) => cell.trim().replace(/"/g, ""))
             })
-            
-            canvas.toBlob((blob) => {
-              if (blob) resolve(blob)
-              else reject(new Error('Failed to generate certificate blob'))
-            }, 'image/png', 0.95)
-          } catch (error) {
-            reject(error)
+            .filter((row) => row.some((cell) => cell.length > 0))
+
+          if (data.length === 0) {
+            addLog("warning", "No valid data found in the CSV file")
+            return
+          }
+
+          setRecipientData(data)
+          setDataInput(data.map((row) => row.join("\t")).join("\n"))
+          addLog("success", `Loaded ${data.length} rows with ${data[0]?.length || 0} columns from CSV file`)
+        } catch (error) {
+          addLog("error", "Failed to parse CSV file. Please check the format")
+        }
+      }
+      reader.onerror = () => {
+        addLog("error", "Failed to read the CSV file")
+      }
+      reader.readAsText(file)
+    },
+    [addLog],
+  )
+
+  const handleFontUpload = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      if (!file) return
+
+      const allowedTypes = ["font/ttf", "font/otf", "font/woff", "font/woff2"]
+      if (!allowedTypes.includes(file.type) && !/\.(ttf|otf|woff|woff2)$/i.test(file.name)) {
+        addLog("error", "Please upload a valid font file (.ttf, .otf, .woff, .woff2)")
+        return
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        addLog("error", "Font file is too large. Please use a font smaller than 5MB")
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const fontName = file.name.split(".").slice(0, -1).join(".")
+          const fontUrl = e.target?.result as string
+
+          const fontFace = new FontFace(fontName, `url(${fontUrl})`)
+
+          document.fonts.add(fontFace)
+          fontFace
+            .load()
+            .then(() => {
+              setCustomFonts((prev) => {
+                if (!prev.includes(fontName)) {
+                  addLog("success", `Custom font "${fontName}" loaded successfully!`)
+                  return [...prev, fontName]
+                }
+                addLog("info", `Font "${fontName}" was already loaded.`)
+                return prev
+              })
+              drawCanvas()
+            })
+            .catch((error) => {
+              addLog("error", `Failed to load custom font "${fontName}": ${error.message}`)
+            })
+        } catch (error) {
+          addLog("error", `Failed to process font file: ${error}`)
+        }
+      }
+      reader.onerror = () => {
+        addLog("error", "Failed to read the font file")
+      }
+      reader.readAsDataURL(file)
+    },
+    [addLog, drawCanvas],
+  )
+
+  const parseDataFromText = useCallback(
+    (text: string) => {
+      try {
+        const lines = text
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+        const data = lines.map((line) => {
+          // Split by comma, tab, or multiple spaces
+          return line
+            .split(/[,\t]+|\s{2,}/)
+            .map((cell) => cell.trim())
+            .filter((cell) => cell.length > 0)
+        })
+
+        setRecipientData(data)
+        if (data.length > 0) {
+          addLog("info", `Parsed ${data.length} rows with ${data[0]?.length || 0} columns`)
+        }
+      } catch {
+        addLog("error", "Failed to parse data from text input")
+      }
+    },
+    [addLog],
+  )
+
+  const handleCanvasMouseDown = useCallback(
+    (event: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!templateImage) return
+
+      const canvas = canvasRef.current
+      if (!canvas) return
+
+      const rect = canvas.getBoundingClientRect()
+      const scaleX = canvas.width / rect.width
+      const scaleY = canvas.height / rect.height
+
+      const mouseX = (event.clientX - rect.left) * scaleX
+      const mouseY = (event.clientY - rect.top) * scaleY
+
+      const effectiveScale = canvasScale
+      const toOriginalCoords = (val: number) => val / effectiveScale
+
+      // Drag selected area
+      if (selectedAreaId) {
+        const selectedArea = nameAreas.find((a) => a.id === selectedAreaId)
+        if (selectedArea) {
+          const scaledArea = {
+            x: selectedArea.x * effectiveScale,
+            y: selectedArea.y * effectiveScale,
+            width: selectedArea.width * effectiveScale,
+            height: selectedArea.height * effectiveScale,
+          }
+
+          const inside =
+            mouseX >= scaledArea.x &&
+            mouseX <= scaledArea.x + scaledArea.width &&
+            mouseY >= scaledArea.y &&
+            mouseY <= scaledArea.y + scaledArea.height
+
+          if (inside) {
+            const startX = toOriginalCoords(mouseX)
+            const startY = toOriginalCoords(mouseY)
+            const original = { ...selectedArea }
+
+            const onMove = (e: MouseEvent) => {
+              const currX = toOriginalCoords((e.clientX - rect.left) * scaleX)
+              const currY = toOriginalCoords((e.clientY - rect.top) * scaleY)
+              const dx = currX - startX
+              const dy = currY - startY
+
+              setNameAreas((prev) =>
+                prev.map((a) => (a.id === selectedAreaId ? { ...a, x: original.x + dx, y: original.y + dy } : a)),
+              )
+            }
+            const onUp = () => {
+              document.removeEventListener("mousemove", onMove)
+              document.removeEventListener("mouseup", onUp)
+              addLog("info", `Moved text area: ${selectedArea.name}`)
+            }
+            document.addEventListener("mousemove", onMove)
+            document.addEventListener("mouseup", onUp)
+            return
           }
         }
-        img.onerror = () => reject(new Error('Failed to load template image'))
-        img.src = templateImage
-      } catch (error) {
-        reject(error)
       }
-    })
-  }, [templateImage, nameAreas, textSettings])
+
+      // Draw new area
+      if (isSelecting) {
+        const startX = toOriginalCoords(mouseX)
+        const startY = toOriginalCoords(mouseY)
+        let drawing = true
+
+        const onMove = (e: MouseEvent) => {
+          if (!drawing) return
+          const currX = toOriginalCoords((e.clientX - rect.left) * scaleX)
+          const currY = toOriginalCoords((e.clientY - rect.top) * scaleY)
+
+          const width = Math.abs(currX - startX)
+          const height = Math.abs(currY - startY)
+          const x = Math.min(startX, currX)
+          const y = Math.min(startY, currY)
+
+          const temp: NameArea = { id: "temp", name: "New Area", x, y, width, height, content: "" }
+          setNameAreas((prev) => [...prev.filter((a) => a.id !== "temp"), temp])
+        }
+        const onUp = () => {
+          drawing = false
+          setIsSelecting(false)
+          setNameAreas((prev) => {
+            const t = prev.find((a) => a.id === "temp")
+            if (t && t.width > 10 && t.height > 10) {
+              const newArea: NameArea = {
+                ...t,
+                id: Date.now().toString(),
+                name: `Text Area ${prev.filter((a) => a.id !== "temp").length + 1}`,
+                content: `Column ${prev.filter((a) => a.id !== "temp").length + 1}`,
+              }
+              setSelectedAreaId(newArea.id)
+              addLog("success", `Created new text area: ${newArea.name}`)
+              return [...prev.filter((a) => a.id !== "temp"), newArea]
+            }
+            return prev.filter((a) => a.id !== "temp")
+          })
+          document.removeEventListener("mousemove", onMove)
+          document.removeEventListener("mouseup", onUp)
+        }
+        document.addEventListener("mousemove", onMove)
+        document.addEventListener("mouseup", onUp)
+        return
+      }
+
+      // Deselect if clicked empty
+      setSelectedAreaId(null)
+    },
+    [templateImage, nameAreas, selectedAreaId, canvasScale, isSelecting, addLog],
+  )
+
+  const generateCertificate = useCallback(
+    (rowData: string[]): Promise<Blob> => {
+      return new Promise((resolve, reject) => {
+        try {
+          const canvas = document.createElement("canvas")
+          const ctx = canvas.getContext("2d")
+          if (!ctx || !templateImage) {
+            reject(new Error("Canvas context not available"))
+            return
+          }
+
+          const img = new Image()
+          img.crossOrigin = "anonymous"
+          img.onload = () => {
+            try {
+              canvas.width = img.width
+              canvas.height = img.height
+              ctx.drawImage(img, 0, 0)
+
+              nameAreas.forEach((area, areaIndex) => {
+                ctx.fillStyle = textSettings.color
+                let fontStyle = ""
+                if (textSettings.bold) fontStyle += "bold "
+                if (textSettings.italic) fontStyle += "italic "
+                ctx.font = `${fontStyle}${textSettings.size}px ${textSettings.font}`
+                ctx.textAlign = textSettings.align
+
+                if (textSettings.shadow) {
+                  ctx.shadowColor = textSettings.shadowColor
+                  ctx.shadowBlur = textSettings.shadowBlur
+                  ctx.shadowOffsetX = textSettings.shadowOffsetX
+                  ctx.shadowOffsetY = textSettings.shadowOffsetY
+                } else {
+                  ctx.shadowBlur = 0
+                  ctx.shadowOffsetX = 0
+                  ctx.shadowOffsetY = 0
+                }
+
+                let textX = area.x
+                if (textSettings.align === "center") textX = area.x + area.width / 2
+                else if (textSettings.align === "right") textX = area.x + area.width
+                const textY = area.y + area.height / 2 + textSettings.size / 3
+
+                // Use the specific data for this area and row
+                const text = rowData[areaIndex] || area.content || ""
+
+                if (textSettings.underline) {
+                  const m = ctx.measureText(text)
+                  const underlineY = textY + 4
+                  ctx.beginPath()
+                  let underlineX = textX
+                  if (textSettings.align === "center") underlineX = textX - m.width / 2
+                  else if (textSettings.align === "right") underlineX = textX - m.width
+                  ctx.moveTo(underlineX, underlineY)
+                  ctx.lineTo(underlineX + m.width, underlineY)
+                  ctx.strokeStyle = textSettings.color
+                  ctx.lineWidth = 2
+                  ctx.stroke()
+                }
+                ctx.fillText(text, textX, textY)
+              })
+
+              canvas.toBlob(
+                (blob) => {
+                  if (blob) resolve(blob)
+                  else reject(new Error("Failed to generate certificate blob"))
+                },
+                "image/png",
+                0.95,
+              )
+            } catch (error) {
+              reject(error)
+            }
+          }
+          img.onerror = () => reject(new Error("Failed to load template image"))
+          img.src = templateImage
+        } catch (error) {
+          reject(error)
+        }
+      })
+    },
+    [templateImage, nameAreas, textSettings],
+  )
 
   const generateAllCertificates = useCallback(async () => {
-    if (!templateImage || nameAreas.length === 0 || names.length === 0) {
-      addLog('error', 'Missing required data: template, text areas, or names')
+    if (!templateImage || nameAreas.length === 0 || recipientData.length === 0) {
+      addLog("error", "Missing required data: template, text areas, or recipient data")
       return
     }
     setIsGenerating(true)
     setGenerationProgress(0)
-    addLog('info', `Starting generation of ${names.length} certificates`)
+    addLog("info", `Starting generation of ${recipientData.length} certificates`)
     try {
       const zip = new JSZip()
-      for (let i = 0; i < names.length; i++) {
-        const name = names[i]
+      for (let i = 0; i < recipientData.length; i++) {
+        const rowData = recipientData[i]
         try {
-          const blob = await generateCertificate(name)
-          zip.file(`${name} - Certificate.png`, blob)
-          setGenerationProgress(((i + 1) / names.length) * 100)
-          addLog('info', `Generated certificate for: ${name}`)
+          const blob = await generateCertificate(rowData)
+          const fileName = rowData[0] || `Certificate_${i + 1}`
+          zip.file(`${fileName} - Certificate.png`, blob)
+          setGenerationProgress(((i + 1) / recipientData.length) * 100)
+          addLog("info", `Generated certificate for: ${fileName}`)
         } catch (error) {
-          addLog('error', `Failed to generate certificate for ${name}: ${error}`)
+          addLog("error", `Failed to generate certificate for row ${i + 1}: ${error}`)
         }
       }
-      addLog('info', 'Creating ZIP file...')
-      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      addLog("info", "Creating ZIP file...")
+      const zipBlob = await zip.generateAsync({ type: "blob" })
       const url = URL.createObjectURL(zipBlob)
-      const a = document.createElement('a')
+      const a = document.createElement("a")
       a.href = url
-      a.download = `certificates-${new Date().toISOString().split('T')[0]}.zip`
+      a.download = `certificates-${new Date().toISOString().split("T")[0]}.zip`
       a.click()
       URL.revokeObjectURL(url)
-      addLog('success', `Successfully generated and downloaded ${names.length} certificates`)
+      addLog("success", `Successfully generated and downloaded ${recipientData.length} certificates`)
     } catch (error) {
-      addLog('error', `Failed to generate certificates: ${error}`)
+      addLog("error", `Failed to generate certificates: ${error}`)
     } finally {
       setIsGenerating(false)
       setGenerationProgress(0)
     }
-  }, [templateImage, nameAreas, names, generateCertificate, addLog])
+  }, [templateImage, nameAreas, recipientData, generateCertificate, addLog])
 
   const deleteSelectedArea = useCallback(() => {
     if (!selectedAreaId) return
-    setNameAreas(prev => prev.filter(a => a.id !== selectedAreaId))
+    setNameAreas((prev) => prev.filter((a) => a.id !== selectedAreaId))
     setSelectedAreaId(null)
-    addLog('info', 'Deleted selected text area')
+    addLog("info", "Deleted selected text area")
   }, [selectedAreaId, addLog])
 
   const duplicateSelectedArea = useCallback(() => {
     if (!selectedAreaId) return
-    const selected = nameAreas.find(a => a.id === selectedAreaId)
+    const selected = nameAreas.find((a) => a.id === selectedAreaId)
     if (!selected) return
     const newArea: NameArea = {
       ...selected,
       id: Date.now().toString(),
       name: `${selected.name} Copy`,
       x: selected.x + 20,
-      y: selected.y + 20
+      y: selected.y + 20,
+      content: selected.content,
     }
-    setNameAreas(prev => [...prev, newArea])
+    setNameAreas((prev) => [...prev, newArea])
     setSelectedAreaId(newArea.id)
-    addLog('success', `Duplicated text area: ${newArea.name}`)
+    addLog("success", `Duplicated text area: ${newArea.name}`)
   }, [selectedAreaId, nameAreas, addLog])
 
-  const handleZoomIn = useCallback(() => setZoomLevel(prev => Math.min(prev + 0.1, 2.0)), [])
-  const handleZoomOut = useCallback(() => setZoomLevel(prev => Math.max(prev - 0.1, 0.5)), [])
+  const handleZoomIn = useCallback(() => setZoomLevel((prev) => Math.min(prev + 0.1, 2.0)), [])
+  const handleZoomOut = useCallback(() => setZoomLevel((prev) => Math.max(prev - 0.1, 0.5)), [])
   const handleResetZoom = useCallback(() => setZoomLevel(1.0), [])
 
   useEffect(() => {
-    const link = document.createElement('link')
+    const link = document.createElement("link")
     link.href =
-      'https://fonts.googleapis.com/css2?family=' +
-      GOOGLE_FONTS
-        .filter(font => !['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana'].includes(font))
-        .map(font => font.replace(/ /g, '+'))
-        .join('&family=') +
-      '&display=swap'
-    link.rel = 'stylesheet'
+      "https://fonts.googleapis.com/css2?family=" +
+      GOOGLE_FONTS.filter((font) => !["Arial", "Helvetica", "Times New Roman", "Georgia", "Verdana"].includes(font))
+        .map((font) => font.replace(/ /g, "+"))
+        .join("&family=") +
+      "&display=swap"
+    link.rel = "stylesheet"
     document.head.appendChild(link)
     return () => {
       if (document.head.contains(link)) document.head.removeChild(link)
@@ -689,18 +785,33 @@ export default function CertificateGenerator() {
   }, [drawCanvas])
 
   useEffect(() => {
-    addLog('info', 'Certificate Generator initialized. Upload a template to get started!')
+    addLog("info", "Certificate Generator initialized. Upload a template to get started!")
   }, [addLog])
 
   const allAvailableFonts = [...GOOGLE_FONTS, ...customFonts]
 
   const ControlsPanel = ({ className }: { className?: string }) => (
-    <div className={cn('flex h-full min-h-0 flex-col', className)}>
+    <div className={cn("flex h-full min-h-0 flex-col", className)}>
       <Tabs defaultValue="setup" className="flex-1 flex flex-col">
         <TabsList className="grid w-full grid-cols-3 bg-gray-900 rounded-none border-b border-gray-700 sticky top-0 z-10">
-          <TabsTrigger value="setup" className="text-white data-[state=active]:bg-gray-700 hover:bg-gray-700/50 rounded-none">Setup</TabsTrigger>
-          <TabsTrigger value="style" className="text-white data-[state=active]:bg-gray-700 hover:bg-gray-700/50 rounded-none">Style</TabsTrigger>
-          <TabsTrigger value="logs" className="text-white data-[state=active]:bg-gray-700 hover:bg-gray-700/50 rounded-none">Logs</TabsTrigger>
+          <TabsTrigger
+            value="setup"
+            className="text-white data-[state=active]:bg-gray-700 hover:bg-gray-700/50 rounded-none"
+          >
+            Setup
+          </TabsTrigger>
+          <TabsTrigger
+            value="style"
+            className="text-white data-[state=active]:bg-gray-700 hover:bg-gray-700/50 rounded-none"
+          >
+            Style
+          </TabsTrigger>
+          <TabsTrigger
+            value="logs"
+            className="text-white data-[state=active]:bg-gray-700 hover:bg-gray-700/50 rounded-none"
+          >
+            Logs
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="setup" className="flex-1 flex flex-col p-4">
@@ -718,10 +829,10 @@ export default function CertificateGenerator() {
                   <Button
                     onClick={() => fileInputRef.current?.click()}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                    variant={templateImage ? 'outline' : 'default'}
+                    variant={templateImage ? "outline" : "default"}
                   >
                     <Upload className="w-4 h-4 mr-2" />
-                    {templateImage ? 'Change Template' : 'Upload Template'}
+                    {templateImage ? "Change Template" : "Upload Template"}
                   </Button>
                   <input
                     ref={fileInputRef}
@@ -732,7 +843,7 @@ export default function CertificateGenerator() {
                   />
                   {templateImage && (
                     <div className="text-xs text-green-400 bg-green-900/30 p-2 rounded border border-green-700">
-                      {'\u2713'} Template loaded ({templateDimensions.width}×{templateDimensions.height}px)
+                      {"\u2713"} Template loaded ({templateDimensions.width}×{templateDimensions.height}px)
                     </div>
                   )}
                 </CardContent>
@@ -751,20 +862,20 @@ export default function CertificateGenerator() {
                     onClick={() => setIsSelecting(true)}
                     disabled={!templateImage}
                     className="w-full bg-purple-600 hover:bg-purple-700 text-white disabled:bg-gray-600 disabled:text-gray-400"
-                    variant={isSelecting ? 'default' : 'outline'}
+                    variant={isSelecting ? "default" : "outline"}
                   >
                     <Move className="w-4 h-4 mr-2" />
-                    {isSelecting ? 'Click & Drag on Canvas' : 'Add Text Area'}
+                    {isSelecting ? "Click & Drag on Canvas" : "Add Text Area"}
                   </Button>
 
                   <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
-                    {nameAreas.map(area => (
+                    {nameAreas.map((area) => (
                       <div
                         key={area.id}
                         className={`p-2 rounded border cursor-pointer transition-all ${
                           selectedAreaId === area.id
-                            ? 'border-blue-500 bg-blue-900/30 shadow-md'
-                            : 'border-gray-600 hover:border-gray-500 bg-gray-800 hover:bg-gray-700'
+                            ? "border-blue-500 bg-blue-900/30 shadow-md"
+                            : "border-gray-600 hover:border-gray-500 bg-gray-800 hover:bg-gray-700"
                         }`}
                         onClick={() => setSelectedAreaId(area.id)}
                       >
@@ -774,7 +885,7 @@ export default function CertificateGenerator() {
                             value={area.name}
                             onChange={(e) => {
                               const newName = e.target.value
-                              setNameAreas(prev => prev.map(a => a.id === area.id ? { ...a, name: newName } : a))
+                              setNameAreas((prev) => prev.map((a) => (a.id === area.id ? { ...a, name: newName } : a)))
                             }}
                             className="text-sm font-medium bg-transparent border-none p-0 h-auto focus:ring-0 focus:outline-none text-white"
                           />
@@ -808,30 +919,53 @@ export default function CertificateGenerator() {
 
                         {selectedAreaId === area.id && (
                           <div className="mt-2 space-y-2">
+                            <div>
+                              <Label htmlFor={`area-content-${area.id}`} className="text-xs text-gray-400">
+                                Content/Column Label
+                              </Label>
+                              <Input
+                                id={`area-content-${area.id}`}
+                                type="text"
+                                value={area.content}
+                                onChange={(e) => {
+                                  const newContent = e.target.value
+                                  setNameAreas((prev) =>
+                                    prev.map((a) => (a.id === area.id ? { ...a, content: newContent } : a)),
+                                  )
+                                  drawCanvas()
+                                }}
+                                placeholder="e.g., Name, Roll Number, etc."
+                                className="text-sm bg-gray-800 border-gray-600 text-white"
+                              />
+                            </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <Label htmlFor={`area-x-${area.id}`} className="text-xs text-gray-400">X</Label>
+                                <Label htmlFor={`area-x-${area.id}`} className="text-xs text-gray-400">
+                                  X
+                                </Label>
                                 <Input
                                   id={`area-x-${area.id}`}
                                   type="number"
                                   value={Math.round(area.x)}
                                   onChange={(e) => {
-                                    const val = parseInt(e.target.value) || 0
-                                    setNameAreas(prev => prev.map(a => a.id === area.id ? { ...a, x: val } : a))
+                                    const val = Number.parseInt(e.target.value) || 0
+                                    setNameAreas((prev) => prev.map((a) => (a.id === area.id ? { ...a, x: val } : a)))
                                     drawCanvas()
                                   }}
                                   className="text-sm bg-gray-800 border-gray-600 text-white"
                                 />
                               </div>
                               <div>
-                                <Label htmlFor={`area-y-${area.id}`} className="text-xs text-gray-400">Y</Label>
+                                <Label htmlFor={`area-y-${area.id}`} className="text-xs text-gray-400">
+                                  Y
+                                </Label>
                                 <Input
                                   id={`area-y-${area.id}`}
                                   type="number"
                                   value={Math.round(area.y)}
                                   onChange={(e) => {
-                                    const val = parseInt(e.target.value) || 0
-                                    setNameAreas(prev => prev.map(a => a.id === area.id ? { ...a, y: val } : a))
+                                    const val = Number.parseInt(e.target.value) || 0
+                                    setNameAreas((prev) => prev.map((a) => (a.id === area.id ? { ...a, y: val } : a)))
                                     drawCanvas()
                                   }}
                                   className="text-sm bg-gray-800 border-gray-600 text-white"
@@ -840,28 +974,36 @@ export default function CertificateGenerator() {
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <Label htmlFor={`area-width-${area.id}`} className="text-xs text-gray-400">Width</Label>
+                                <Label htmlFor={`area-width-${area.id}`} className="text-xs text-gray-400">
+                                  Width
+                                </Label>
                                 <Input
                                   id={`area-width-${area.id}`}
                                   type="number"
                                   value={Math.round(area.width)}
                                   onChange={(e) => {
-                                    const val = parseInt(e.target.value) || 0
-                                    setNameAreas(prev => prev.map(a => a.id === area.id ? { ...a, width: val } : a))
+                                    const val = Number.parseInt(e.target.value) || 0
+                                    setNameAreas((prev) =>
+                                      prev.map((a) => (a.id === area.id ? { ...a, width: val } : a)),
+                                    )
                                     drawCanvas()
                                   }}
                                   className="text-sm bg-gray-800 border-gray-600 text-white"
                                 />
                               </div>
                               <div>
-                                <Label htmlFor={`area-height-${area.id}`} className="text-xs text-gray-400">Height</Label>
+                                <Label htmlFor={`area-height-${area.id}`} className="text-xs text-gray-400">
+                                  Height
+                                </Label>
                                 <Input
                                   id={`area-height-${area.id}`}
                                   type="number"
                                   value={Math.round(area.height)}
                                   onChange={(e) => {
-                                    const val = parseInt(e.target.value) || 0
-                                    setNameAreas(prev => prev.map(a => a.id === area.id ? { ...a, height: val } : a))
+                                    const val = Number.parseInt(e.target.value) || 0
+                                    setNameAreas((prev) =>
+                                      prev.map((a) => (a.id === area.id ? { ...a, height: val } : a)),
+                                    )
                                     drawCanvas()
                                   }}
                                   className="text-sm bg-gray-800 border-gray-600 text-white"
@@ -885,19 +1027,21 @@ export default function CertificateGenerator() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm flex items-center gap-2 text-white">
                     <Users className="w-4 h-4 text-teal-400" />
-                    Recipients ({names.length})
+                    Recipients ({recipientData.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <Label htmlFor="names" className="text-xs text-gray-300">Names (one per line)</Label>
+                    <Label htmlFor="data" className="text-xs text-gray-300">
+                      Data (one row per line, columns separated by commas or tabs)
+                    </Label>
                     <Textarea
-                      id="names"
-                      placeholder={'John Doe\nJane Smith\nMike Johnson'}
-                      value={nameInput}
+                      id="data"
+                      placeholder={"John Doe,12345,Grade A\nJane Smith,12346,Grade B\nMike Johnson,12347,Grade A"}
+                      value={dataInput}
                       onChange={(e) => {
-                        setNameInput(e.target.value)
-                        parseNamesFromText(e.target.value)
+                        setDataInput(e.target.value)
+                        parseDataFromText(e.target.value)
                       }}
                       rows={4}
                       className="text-sm bg-gray-800 border-gray-600 text-white"
@@ -915,13 +1059,12 @@ export default function CertificateGenerator() {
                     <Upload className="w-4 h-4 mr-2" />
                     Upload CSV
                   </Button>
-                  <input
-                    ref={csvInputRef}
-                    type="file"
-                    accept=".csv"
-                    onChange={handleCSVUpload}
-                    className="hidden"
-                  />
+                  <input ref={csvInputRef} type="file" accept=".csv" onChange={handleCSVUpload} className="hidden" />
+                  {recipientData.length > 0 && (
+                    <div className="text-xs text-gray-400 bg-gray-800/30 p-2 rounded border border-gray-700">
+                      Preview: {recipientData[0]?.join(" | ") || "No data"}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -937,7 +1080,9 @@ export default function CertificateGenerator() {
                   <CardTitle className="text-sm text-white">Preview</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Label htmlFor="preview-name" className="text-xs text-gray-300">Preview Name</Label>
+                  <Label htmlFor="preview-name" className="text-xs text-gray-300">
+                    Preview Name
+                  </Label>
                   <Input
                     id="preview-name"
                     value={previewName}
@@ -959,13 +1104,21 @@ export default function CertificateGenerator() {
                 <CardContent className="space-y-4">
                   <div>
                     <Label className="text-xs text-gray-300 font-medium">Font Family</Label>
-                    <Select value={textSettings.font} onValueChange={(value) => setTextSettings(prev => ({ ...prev, font: value }))}>
+                    <Select
+                      value={textSettings.font}
+                      onValueChange={(value) => setTextSettings((prev) => ({ ...prev, font: value }))}
+                    >
                       <SelectTrigger className="text-sm bg-gray-800 border-gray-600 text-white">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-gray-800 border-gray-600">
-                        {allAvailableFonts.map(font => (
-                          <SelectItem key={font} value={font} className="text-white hover:bg-gray-700" style={{ fontFamily: font }}>
+                        {allAvailableFonts.map((font) => (
+                          <SelectItem
+                            key={font}
+                            value={font}
+                            className="text-white hover:bg-gray-700"
+                            style={{ fontFamily: font }}
+                          >
                             {font}
                           </SelectItem>
                         ))}
@@ -977,21 +1130,21 @@ export default function CertificateGenerator() {
                     <Label className="text-xs text-gray-300 font-medium">Size: {textSettings.size}px</Label>
                     <Slider
                       value={[textSettings.size]}
-                      onValueChange={([value]) => setTextSettings(prev => ({ ...prev, size: value }))}
+                      onValueChange={([value]) => setTextSettings((prev) => ({ ...prev, size: value }))}
                       min={12}
                       max={200}
                       step={1}
                       className="mt-2"
                     />
                   </div>
-                  
+
                   <div className="space-y-4">
                     <div>
                       <Label className="text-xs text-gray-300 font-medium mb-2 block">Color</Label>
                       <Input
                         type="color"
                         value={textSettings.color}
-                        onChange={(e) => setTextSettings(prev => ({ ...prev, color: e.target.value }))}
+                        onChange={(e) => setTextSettings((prev) => ({ ...prev, color: e.target.value }))}
                         className="w-full h-10 bg-gray-800 border-gray-600"
                       />
                     </div>
@@ -1000,24 +1153,24 @@ export default function CertificateGenerator() {
                       <div className="flex border border-gray-600 rounded bg-gray-800 overflow-hidden">
                         <Button
                           size="sm"
-                          variant={textSettings.align === 'left' ? 'default' : 'ghost'}
-                          onClick={() => setTextSettings(prev => ({ ...prev, align: 'left' }))}
+                          variant={textSettings.align === "left" ? "default" : "ghost"}
+                          onClick={() => setTextSettings((prev) => ({ ...prev, align: "left" }))}
                           className="flex-1 rounded-none text-white hover:bg-gray-600"
                         >
                           <AlignLeft className="w-4 h-4" />
                         </Button>
                         <Button
                           size="sm"
-                          variant={textSettings.align === 'center' ? 'default' : 'ghost'}
-                          onClick={() => setTextSettings(prev => ({ ...prev, align: 'center' }))}
+                          variant={textSettings.align === "center" ? "default" : "ghost"}
+                          onClick={() => setTextSettings((prev) => ({ ...prev, align: "center" }))}
                           className="flex-1 rounded-none border-x border-gray-600 text-white hover:bg-gray-600"
                         >
                           <AlignCenter className="w-4 h-4" />
                         </Button>
                         <Button
                           size="sm"
-                          variant={textSettings.align === 'right' ? 'default' : 'ghost'}
-                          onClick={() => setTextSettings(prev => ({ ...prev, align: 'right' }))}
+                          variant={textSettings.align === "right" ? "default" : "ghost"}
+                          onClick={() => setTextSettings((prev) => ({ ...prev, align: "right" }))}
                           className="flex-1 rounded-none text-white hover:bg-gray-600"
                         >
                           <AlignRight className="w-4 h-4" />
@@ -1036,7 +1189,7 @@ export default function CertificateGenerator() {
                         </Label>
                         <Switch
                           checked={textSettings.bold}
-                          onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, bold: checked }))}
+                          onCheckedChange={(checked) => setTextSettings((prev) => ({ ...prev, bold: checked }))}
                         />
                       </div>
                       <div className="flex items-center justify-between">
@@ -1046,7 +1199,7 @@ export default function CertificateGenerator() {
                         </Label>
                         <Switch
                           checked={textSettings.italic}
-                          onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, italic: checked }))}
+                          onCheckedChange={(checked) => setTextSettings((prev) => ({ ...prev, italic: checked }))}
                         />
                       </div>
                       <div className="flex items-center justify-between">
@@ -1056,7 +1209,7 @@ export default function CertificateGenerator() {
                         </Label>
                         <Switch
                           checked={textSettings.underline}
-                          onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, underline: checked }))}
+                          onCheckedChange={(checked) => setTextSettings((prev) => ({ ...prev, underline: checked }))}
                         />
                       </div>
                     </div>
@@ -1076,11 +1229,11 @@ export default function CertificateGenerator() {
                   <div className="flex items-center space-x-2">
                     <Switch
                       checked={textSettings.shadow}
-                      onCheckedChange={(checked) => setTextSettings(prev => ({ ...prev, shadow: checked }))}
+                      onCheckedChange={(checked) => setTextSettings((prev) => ({ ...prev, shadow: checked }))}
                     />
                     <Label className="text-xs text-gray-300 cursor-pointer">Text Shadow</Label>
                   </div>
-                  
+
                   {textSettings.shadow && (
                     <div className="space-y-3 pl-4 border-l-2 border-gray-600">
                       <div>
@@ -1088,7 +1241,7 @@ export default function CertificateGenerator() {
                         <Input
                           type="color"
                           value={textSettings.shadowColor}
-                          onChange={(e) => setTextSettings(prev => ({ ...prev, shadowColor: e.target.value }))}
+                          onChange={(e) => setTextSettings((prev) => ({ ...prev, shadowColor: e.target.value }))}
                           className="h-8 bg-gray-800 border-gray-600"
                         />
                       </div>
@@ -1096,7 +1249,7 @@ export default function CertificateGenerator() {
                         <Label className="text-xs text-gray-300">Blur: {textSettings.shadowBlur}px</Label>
                         <Slider
                           value={[textSettings.shadowBlur]}
-                          onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowBlur: value }))}
+                          onValueChange={([value]) => setTextSettings((prev) => ({ ...prev, shadowBlur: value }))}
                           min={0}
                           max={20}
                           step={1}
@@ -1107,7 +1260,7 @@ export default function CertificateGenerator() {
                           <Label className="text-xs text-gray-300">X: {textSettings.shadowOffsetX}px</Label>
                           <Slider
                             value={[textSettings.shadowOffsetX]}
-                            onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowOffsetX: value }))}
+                            onValueChange={([value]) => setTextSettings((prev) => ({ ...prev, shadowOffsetX: value }))}
                             min={-10}
                             max={10}
                             step={1}
@@ -1117,7 +1270,7 @@ export default function CertificateGenerator() {
                           <Label className="text-xs text-gray-300">Y: {textSettings.shadowOffsetY}px</Label>
                           <Slider
                             value={[textSettings.shadowOffsetY]}
-                            onValueChange={([value]) => setTextSettings(prev => ({ ...prev, shadowOffsetY: value }))}
+                            onValueChange={([value]) => setTextSettings((prev) => ({ ...prev, shadowOffsetY: value }))}
                             min={-10}
                             max={10}
                             step={1}
@@ -1142,7 +1295,7 @@ export default function CertificateGenerator() {
   )
 
   const GeneratePanel = ({ className }: { className?: string }) => (
-    <div className={cn('h-full min-h-0 overflow-y-auto p-4', className)}>
+    <div className={cn("h-full min-h-0 overflow-y-auto p-4", className)}>
       <div className="space-y-4">
         <Card className="bg-gray-700 border-gray-600 shadow-lg">
           <CardHeader className="pb-3">
@@ -1154,7 +1307,7 @@ export default function CertificateGenerator() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-white">{names.length}</div>
+                <div className="text-2xl font-bold text-white">{recipientData.length}</div>
                 <div className="text-xs text-gray-400">Recipients</div>
               </div>
               <div>
@@ -1175,11 +1328,13 @@ export default function CertificateGenerator() {
 
             <Button
               onClick={generateAllCertificates}
-              disabled={!templateImage || nameAreas.length === 0 || names.length === 0 || isGenerating}
+              disabled={!templateImage || nameAreas.length === 0 || recipientData.length === 0 || isGenerating}
               className="w-full bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-600 disabled:text-gray-400"
               size="lg"
             >
-              {isGenerating ? 'Generating...' : (
+              {isGenerating ? (
+                "Generating..."
+              ) : (
                 <>
                   <Download className="w-4 h-4 mr-2" />
                   Generate & Download
@@ -1187,11 +1342,11 @@ export default function CertificateGenerator() {
               )}
             </Button>
 
-            {(!templateImage || nameAreas.length === 0 || names.length === 0) && (
+            {(!templateImage || nameAreas.length === 0 || recipientData.length === 0) && (
               <div className="text-xs text-gray-400 text-center space-y-1">
-                {!templateImage && <div>{'•'} Upload a template</div>}
-                {nameAreas.length === 0 && <div>{'•'} Add text areas</div>}
-                {names.length === 0 && <div>{'•'} Add recipient names</div>}
+                {!templateImage && <div>{"•"} Upload a template</div>}
+                {nameAreas.length === 0 && <div>{"•"} Add text areas</div>}
+                {recipientData.length === 0 && <div>{"•"} Add recipient data</div>}
               </div>
             )}
           </CardContent>
@@ -1204,7 +1359,9 @@ export default function CertificateGenerator() {
           <CardContent className="space-y-2">
             <div className="flex justify-between text-xs">
               <span className="text-gray-400">Template Size:</span>
-              <span className="text-white">{templateDimensions.width}×{templateDimensions.height}px</span>
+              <span className="text-white">
+                {templateDimensions.width}×{templateDimensions.height}px
+              </span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-gray-400">Text Areas:</span>
@@ -1212,7 +1369,7 @@ export default function CertificateGenerator() {
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-gray-400">Recipients:</span>
-              <span className="text-white">{names.length}</span>
+              <span className="text-white">{recipientData.length}</span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-gray-400">Font:</span>
@@ -1235,7 +1392,8 @@ export default function CertificateGenerator() {
           <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 shadow-xl">
             <h1 className="text-xl font-semibold mb-2">Desktop Only</h1>
             <p className="text-sm text-gray-300">
-              This tool is not compatible with mobile or small screens. Please use a desktop or laptop device to continue.
+              This tool is not compatible with mobile or small screens. Please use a desktop or laptop device to
+              continue.
             </p>
             <div className="mt-4 text-xs text-gray-400">
               Tip: Open this page on your computer for the best experience.
@@ -1256,10 +1414,13 @@ export default function CertificateGenerator() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-gray-300">
-              This tool is optimized for desktop and laptop screens. Please open it on a device with a larger display to continue.
+              This tool is optimized for desktop and laptop screens. Please open it on a device with a larger display to
+              continue.
             </p>
             <div className="text-xs text-gray-400">
-              note: If you would like to use desktop mode in mobile, the website is not yet capable with mobile and you will have issues with making certificates so i request you to use laptop/pc or in mobile with a mouseobile and you will have issues with making certificates so i request
+              note: If you would like to use desktop mode in mobile, the website is not yet capable with mobile and you
+              will have issues with making certificates so i request you to use laptop/pc or in mobile with a mouseobile
+              and you will have issues with making certificates so i request
             </div>
           </CardContent>
         </Card>
@@ -1277,10 +1438,12 @@ export default function CertificateGenerator() {
               <FileImage className="w-5 h-5 text-white" />
             </div>
             <h1 className="text-xl font-bold text-white">Lazy Certification</h1>
-            <Badge variant="secondary" className="ml-2 bg-gray-700 text-gray-300 border-gray-600">v2.0</Badge>
+            <Badge variant="secondary" className="ml-2 bg-gray-700 text-gray-300 border-gray-600">
+              v2.0
+            </Badge>
           </div>
           <div className="text-sm text-gray-300">
-            Made by{' '}
+            Made by{" "}
             <a
               href="https://anishkumar.tech"
               target="_blank"
@@ -1321,27 +1484,23 @@ export default function CertificateGenerator() {
                   size="sm"
                   variant="outline"
                   onClick={handleZoomOut}
-                  className="border-gray-600 text-white hover:bg-gray-700"
+                  className="border-gray-600 text-white hover:bg-gray-700 bg-transparent"
                 >
                   <ZoomOut className="w-4 h-4" />
                 </Button>
-                <span
-                  className="text-sm text-gray-300 cursor-pointer"
-                  onClick={handleResetZoom}
-                  title="Reset Zoom"
-                >
+                <span className="text-sm text-gray-300 cursor-pointer" onClick={handleResetZoom} title="Reset Zoom">
                   {Math.round(zoomLevel * 100)}%
                 </span>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={handleZoomIn}
-                  className="border-gray-600 text-white hover:bg-gray-700"
+                  className="border-gray-600 text-white hover:bg-gray-700 bg-transparent"
                 >
                   <ZoomIn className="w-4 h-4" />
                 </Button>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <Button
                   size="sm"
@@ -1358,7 +1517,7 @@ export default function CertificateGenerator() {
                   variant="outline"
                   disabled={!selectedAreaId}
                   onClick={duplicateSelectedArea}
-                  className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500"
+                  className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 bg-transparent"
                 >
                   <Copy className="w-4 h-4 mr-1" />
                   Duplicate
@@ -1368,7 +1527,7 @@ export default function CertificateGenerator() {
                   variant="outline"
                   disabled={!selectedAreaId}
                   onClick={deleteSelectedArea}
-                  className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500"
+                  className="border-gray-600 text-white hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 bg-transparent"
                 >
                   <Trash2 className="w-4 h-4 mr-1" />
                   Delete
@@ -1384,7 +1543,7 @@ export default function CertificateGenerator() {
                     ref={canvasRef}
                     onMouseDown={handleCanvasMouseDown}
                     className="max-w-full h-auto border border-gray-600 rounded"
-                    style={{ cursor: isSelecting ? 'crosshair' : 'default' }}
+                    style={{ cursor: isSelecting ? "crosshair" : "default" }}
                   />
                 </div>
               ) : (

@@ -27,6 +27,7 @@ export const metadata: Metadata = {
     description: 'Generate professional certificates effortlessly with Lazy Certification. Upload templates, add recipient names, customize text, and batch generate certificates for your team or event.',
     images: ['/certificate-generator-tool.png'], // Placeholder image
   },
+    generator: 'v0.app'
 }
 
 export default function RootLayout({
