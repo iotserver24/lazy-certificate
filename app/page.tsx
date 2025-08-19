@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
@@ -19,6 +20,7 @@ import {
   Upload,
   Download,
   FileImage,
+  Users,
   Palette,
   Type,
   Trash2,
@@ -126,6 +128,9 @@ export default function CertificateGenerator() {
     letterSpacing: 0,
     lineHeight: 1.2,
   })
+  const [names, setNames] = useState<string[]>([])
+  const [nameInput, setNameInput] = useState("")
+  const [isSelecting, setIsSelecting] = useState(false)
   const [previewName, setPreviewName] = useState("John Doe")
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState(0)
@@ -136,9 +141,6 @@ export default function CertificateGenerator() {
   const [customFonts, setCustomFonts] = useState<string[]>([])
   const [zoomLevel, setZoomLevel] = useState(1.0)
   const [isDesktop, setIsDesktop] = useState(true)
-  const [isSelecting, setIsSelecting] = useState(false)
-  const [names, setNames] = useState<string[]>([])
-  const [nameInput, setNameInput] = useState("")
 
   const getIsBlockedMobile = () => {
     if (typeof window === "undefined") return false
@@ -196,7 +198,7 @@ export default function CertificateGenerator() {
     const newArea: NameArea = {
       id: Date.now().toString(),
       name: `Text Area ${nameAreas.length + 1}`,
-      content: "", // Add this line
+      content: nameAreas.length === 0 ? "John Doe" : `Text ${nameAreas.length + 1}`, // Default content
       x: defaultX,
       y: defaultY,
       width: defaultWidth,
@@ -309,8 +311,7 @@ export default function CertificateGenerator() {
         const textY = scaledArea.y + scaledArea.height / 2 + (textSettings.size * effectiveScale) / 3
 
         if (textSettings.underline) {
-          const displayText = area.content || area.name || "Sample Text"
-          const metrics = ctx.measureText(displayText)
+          const metrics = ctx.measureText(area.content || "Sample Text")
           const underlineY = textY + 4
           ctx.beginPath()
           let underlineX = textX
@@ -329,12 +330,11 @@ export default function CertificateGenerator() {
           ctx.stroke()
         }
 
-        const displayText = area.content || area.name || "Sample Text"
-        ctx.fillText(displayText, textX, textY)
+        ctx.fillText(area.content || "Sample Text", textX, textY)
       })
     }
     img.src = templateImage
-  }, [templateImage, nameAreas, selectedAreaId, textSettings, previewName, showGrid, zoomLevel, canvasScale])
+  }, [templateImage, nameAreas, selectedAreaId, textSettings, previewName, showGrid, zoomLevel])
 
   const handleImageUpload = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -601,87 +601,88 @@ export default function CertificateGenerator() {
     [templateImage, nameAreas, selectedAreaId, canvasScale, isSelecting, addLog],
   )
 
-  const generateCertificate = useCallback((): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      try {
-        const canvas = document.createElement("canvas")
-        const ctx = canvas.getContext("2d")
-        if (!ctx || !templateImage) {
-          reject(new Error("Canvas context not available"))
-          return
-        }
-
-        const img = new Image()
-        img.crossOrigin = "anonymous"
-        img.onload = () => {
-          try {
-            canvas.width = img.width
-            canvas.height = img.height
-            ctx.drawImage(img, 0, 0)
-
-            nameAreas.forEach((area) => {
-              ctx.fillStyle = textSettings.color
-              let fontStyle = ""
-              if (textSettings.bold) fontStyle += "bold "
-              if (textSettings.italic) fontStyle += "italic "
-              ctx.font = `${fontStyle}${textSettings.size}px ${textSettings.font}`
-              ctx.textAlign = textSettings.align
-
-              if (textSettings.shadow) {
-                ctx.shadowColor = textSettings.shadowColor
-                ctx.shadowBlur = textSettings.shadowBlur
-                ctx.shadowOffsetX = textSettings.shadowOffsetX
-                ctx.shadowOffsetY = textSettings.shadowOffsetY
-              } else {
-                ctx.shadowBlur = 0
-                ctx.shadowOffsetX = 0
-                ctx.shadowOffsetY = 0
-              }
-
-              let textX = area.x
-              if (textSettings.align === "center") textX = area.x + area.width / 2
-              else if (textSettings.align === "right") textX = area.x + area.width
-              const textY = area.y + area.height / 2 + textSettings.size / 3
-
-              const displayText = area.content || "Sample Text"
-
-              if (textSettings.underline) {
-                const m = ctx.measureText(displayText)
-                const underlineY = textY + 4
-                ctx.beginPath()
-                let underlineX = textX
-                if (textSettings.align === "center") underlineX = textX - m.width / 2
-                else if (textSettings.align === "right") underlineX = textX - m.width
-                ctx.moveTo(underlineX, underlineY)
-                ctx.lineTo(underlineX + m.width, underlineY)
-                ctx.strokeStyle = textSettings.color
-                ctx.lineWidth = 2
-                ctx.stroke()
-              }
-              ctx.fillText(displayText, textX, textY)
-            })
-
-            canvas.toBlob(
-              (blob) => {
-                if (blob) resolve(blob)
-                else reject(new Error("Failed to generate certificate blob"))
-              },
-              "image/png",
-              0.95,
-            )
-          } catch (error) {
-            reject(error)
+  const generateCertificate = useCallback(
+    (name: string): Promise<Blob> => {
+      return new Promise((resolve, reject) => {
+        try {
+          const canvas = document.createElement("canvas")
+          const ctx = canvas.getContext("2d")
+          if (!ctx || !templateImage) {
+            reject(new Error("Canvas context not available"))
+            return
           }
-        }
-        img.onerror = () => reject(new Error("Failed to load template image"))
-        img.src = templateImage
-      } catch (error) {
-        reject(error)
-      }
-    })
-  }, [templateImage, nameAreas, textSettings])
 
-  const generateCertificateDownload = useCallback(async () => {
+          const img = new Image()
+          img.crossOrigin = "anonymous"
+          img.onload = () => {
+            try {
+              canvas.width = img.width
+              canvas.height = img.height
+              ctx.drawImage(img, 0, 0)
+
+              nameAreas.forEach((area) => {
+                ctx.fillStyle = textSettings.color
+                let fontStyle = ""
+                if (textSettings.bold) fontStyle += "bold "
+                if (textSettings.italic) fontStyle += "italic "
+                ctx.font = `${fontStyle}${textSettings.size}px ${textSettings.font}`
+                ctx.textAlign = textSettings.align
+
+                if (textSettings.shadow) {
+                  ctx.shadowColor = textSettings.shadowColor
+                  ctx.shadowBlur = textSettings.shadowBlur
+                  ctx.shadowOffsetX = textSettings.shadowOffsetX
+                  ctx.shadowOffsetY = textSettings.shadowOffsetY
+                } else {
+                  ctx.shadowBlur = 0
+                  ctx.shadowOffsetX = 0
+                  ctx.shadowOffsetY = 0
+                }
+
+                let textX = area.x
+                if (textSettings.align === "center") textX = area.x + area.width / 2
+                else if (textSettings.align === "right") textX = area.x + area.width
+                const textY = area.y + area.height / 2 + textSettings.size / 3
+
+                if (textSettings.underline) {
+                  const m = ctx.measureText(area.content || "Sample Text")
+                  const underlineY = textY + 4
+                  ctx.beginPath()
+                  let underlineX = textX
+                  if (textSettings.align === "center") underlineX = textX - m.width / 2
+                  else if (textSettings.align === "right") underlineX = textX - m.width
+                  ctx.moveTo(underlineX, underlineY)
+                  ctx.lineTo(underlineX + m.width, underlineY)
+                  ctx.strokeStyle = textSettings.color
+                  ctx.lineWidth = 2
+                  ctx.stroke()
+                }
+                ctx.fillText(area.content || "Sample Text", textX, textY)
+              })
+
+              canvas.toBlob(
+                (blob) => {
+                  if (blob) resolve(blob)
+                  else reject(new Error("Failed to generate certificate blob"))
+                },
+                "image/png",
+                0.95,
+              )
+            } catch (error) {
+              reject(error)
+            }
+          }
+          img.onerror = () => reject(new Error("Failed to load template image"))
+          img.src = templateImage
+        } catch (error) {
+          reject(error)
+        }
+      })
+    },
+    [templateImage, nameAreas, textSettings],
+  )
+
+  const generateAllCertificates = useCallback(async () => {
     if (!templateImage || nameAreas.length === 0) {
       addLog("error", "Missing required data: template or text areas")
       return
@@ -690,7 +691,7 @@ export default function CertificateGenerator() {
     setGenerationProgress(0)
     addLog("info", "Starting certificate generation")
     try {
-      const blob = await generateCertificate()
+      const blob = await generateCertificate("certificate")
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
@@ -721,7 +722,6 @@ export default function CertificateGenerator() {
       ...selected,
       id: Date.now().toString(),
       name: `${selected.name} Copy`,
-      content: selected.content, // Add this line
       x: selected.x + 20,
       y: selected.y + 20,
     }
@@ -886,6 +886,26 @@ export default function CertificateGenerator() {
                           )}
                         </div>
 
+                        <div>
+                          <Label htmlFor={`area-content-${area.id}`} className="text-xs text-gray-400">
+                            Content
+                          </Label>
+                          <Input
+                            id={`area-content-${area.id}`}
+                            type="text"
+                            value={area.content}
+                            onChange={(e) => {
+                              const newContent = e.target.value
+                              setNameAreas((prev) =>
+                                prev.map((a) => (a.id === area.id ? { ...a, content: newContent } : a)),
+                              )
+                              drawCanvas()
+                            }}
+                            placeholder="Enter text content..."
+                            className="text-sm bg-gray-800 border-gray-600 text-white"
+                          />
+                        </div>
+
                         {selectedAreaId === area.id && (
                           <div className="mt-2 space-y-2">
                             <div className="grid grid-cols-2 gap-2">
@@ -960,25 +980,6 @@ export default function CertificateGenerator() {
                                 />
                               </div>
                             </div>
-                            <div>
-                              <Label htmlFor={`area-content-${area.id}`} className="text-xs text-gray-400">
-                                Content
-                              </Label>
-                              <Input
-                                id={`area-content-${area.id}`}
-                                type="text"
-                                value={area.content}
-                                placeholder="Enter text content..."
-                                onChange={(e) => {
-                                  const newContent = e.target.value
-                                  setNameAreas((prev) =>
-                                    prev.map((a) => (a.id === area.id ? { ...a, content: newContent } : a)),
-                                  )
-                                  drawCanvas()
-                                }}
-                                className="text-sm bg-gray-800 border-gray-600 text-white"
-                              />
-                            </div>
                           </div>
                         )}
 
@@ -990,6 +991,47 @@ export default function CertificateGenerator() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Names */}
+              <Card className="bg-gray-700 border-gray-600 shadow-lg">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2 text-white">
+                    <Users className="w-4 h-4 text-teal-400" />
+                    Recipients ({names.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <Label htmlFor="names" className="text-xs text-gray-300">
+                      Names (one per line)
+                    </Label>
+                    <Textarea
+                      id="names"
+                      placeholder={"John Doe\nJane Smith\nMike Johnson"}
+                      value={nameInput}
+                      onChange={(e) => {
+                        setNameInput(e.target.value)
+                        parseNamesFromText(e.target.value)
+                      }}
+                      rows={4}
+                      className="text-sm bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                  <div className="text-center">
+                    <span className="text-xs text-gray-500">or</span>
+                  </div>
+                  <Button
+                    onClick={() => csvInputRef.current?.click()}
+                    variant="outline"
+                    className="w-full border-gray-600 text-white hover:bg-gray-600"
+                    size="sm"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload CSV
+                  </Button>
+                  <input ref={csvInputRef} type="file" accept=".csv" onChange={handleCSVUpload} className="hidden" />
+                </CardContent>
+              </Card>
             </div>
           </ScrollArea>
         </TabsContent>
@@ -997,25 +1039,6 @@ export default function CertificateGenerator() {
         <TabsContent value="style" className="flex-1 p-4">
           <ScrollArea className="h-full">
             <div className="space-y-4">
-              {/* Preview */}
-              <Card className="bg-gray-700 border-gray-600 shadow-lg">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm text-white">Preview</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Label htmlFor="preview-name" className="text-xs text-gray-300">
-                    Preview Name
-                  </Label>
-                  <Input
-                    id="preview-name"
-                    value={previewName}
-                    onChange={(e) => setPreviewName(e.target.value)}
-                    placeholder="Enter name for preview"
-                    className="text-sm bg-gray-800 border-gray-600 text-white"
-                  />
-                </CardContent>
-              </Card>
-
               {/* Typography */}
               <Card className="bg-gray-700 border-gray-600 shadow-lg">
                 <CardHeader className="pb-3">
@@ -1228,7 +1251,11 @@ export default function CertificateGenerator() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 text-center">
+            <div className="grid grid-cols-2 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold text-white">{names.length}</div>
+                <div className="text-xs text-gray-400">Recipients</div>
+              </div>
               <div>
                 <div className="text-2xl font-bold text-white">{nameAreas.length}</div>
                 <div className="text-xs text-gray-400">Text Areas</div>
@@ -1246,7 +1273,7 @@ export default function CertificateGenerator() {
             )}
 
             <Button
-              onClick={generateCertificateDownload}
+              onClick={generateAllCertificates}
               disabled={!templateImage || nameAreas.length === 0 || isGenerating}
               className="w-full bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-600 disabled:text-gray-400"
               size="lg"
@@ -1256,7 +1283,7 @@ export default function CertificateGenerator() {
               ) : (
                 <>
                   <Download className="w-4 h-4 mr-2" />
-                  Generate Certificate
+                  Generate & Download
                 </>
               )}
             </Button>
@@ -1284,6 +1311,10 @@ export default function CertificateGenerator() {
             <div className="flex justify-between text-xs">
               <span className="text-gray-400">Text Areas:</span>
               <span className="text-white">{nameAreas.length}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-400">Recipients:</span>
+              <span className="text-white">{names.length}</span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-gray-400">Font:</span>
