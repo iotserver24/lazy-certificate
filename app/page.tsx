@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
@@ -20,7 +19,6 @@ import {
   Upload,
   Download,
   FileImage,
-  Users,
   Palette,
   Type,
   Trash2,
@@ -38,7 +36,6 @@ import {
   Grid,
   ExternalLink,
 } from "lucide-react"
-import JSZip from "jszip"
 import LogViewer from "@/components/log-viewer"
 import { cn } from "@/lib/utils"
 
@@ -66,7 +63,7 @@ interface NameArea {
   height: number
   id: string
   name: string
-  content: string // Add this field for the actual text content
+  content: string // Add this new field
 }
 
 export interface LogEntry {
@@ -129,9 +126,6 @@ export default function CertificateGenerator() {
     letterSpacing: 0,
     lineHeight: 1.2,
   })
-  const [recipientData, setRecipientData] = useState<string[][]>([]) // Change from names array to 2D array
-  const [dataInput, setDataInput] = useState("") // Change from nameInput
-  const [isSelecting, setIsSelecting] = useState(false)
   const [previewName, setPreviewName] = useState("John Doe")
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState(0)
@@ -142,6 +136,9 @@ export default function CertificateGenerator() {
   const [customFonts, setCustomFonts] = useState<string[]>([])
   const [zoomLevel, setZoomLevel] = useState(1.0)
   const [isDesktop, setIsDesktop] = useState(true)
+  const [isSelecting, setIsSelecting] = useState(false)
+  const [names, setNames] = useState<string[]>([])
+  const [nameInput, setNameInput] = useState("")
 
   const getIsBlockedMobile = () => {
     if (typeof window === "undefined") return false
@@ -199,7 +196,7 @@ export default function CertificateGenerator() {
     const newArea: NameArea = {
       id: Date.now().toString(),
       name: `Text Area ${nameAreas.length + 1}`,
-      content: `Column ${nameAreas.length + 1}`, // Default content
+      content: "", // Add this line
       x: defaultX,
       y: defaultY,
       width: defaultWidth,
@@ -264,7 +261,7 @@ export default function CertificateGenerator() {
         }
       }
 
-      nameAreas.forEach((area, areaIndex) => {
+      nameAreas.forEach((area) => {
         const scaledArea = {
           x: area.x * effectiveScale,
           y: area.y * effectiveScale,
@@ -312,7 +309,8 @@ export default function CertificateGenerator() {
         const textY = scaledArea.y + scaledArea.height / 2 + (textSettings.size * effectiveScale) / 3
 
         if (textSettings.underline) {
-          const metrics = ctx.measureText(previewName)
+          const displayText = area.content || area.name || "Sample Text"
+          const metrics = ctx.measureText(displayText)
           const underlineY = textY + 4
           ctx.beginPath()
           let underlineX = textX
@@ -331,17 +329,12 @@ export default function CertificateGenerator() {
           ctx.stroke()
         }
 
-        // Get content for this area from the first row of data, or use area.content as fallback
-        const displayText =
-          recipientData.length > 0 && recipientData[0] && recipientData[0][areaIndex]
-            ? recipientData[0][areaIndex]
-            : area.content || previewName
-
+        const displayText = area.content || area.name || "Sample Text"
         ctx.fillText(displayText, textX, textY)
       })
     }
     img.src = templateImage
-  }, [templateImage, nameAreas, selectedAreaId, textSettings, previewName, showGrid, zoomLevel, recipientData])
+  }, [templateImage, nameAreas, selectedAreaId, textSettings, previewName, showGrid, zoomLevel, canvasScale])
 
   const handleImageUpload = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -397,20 +390,21 @@ export default function CertificateGenerator() {
         try {
           const csv = e.target?.result as string
           const lines = csv.split("\n").filter((line) => line.trim())
-          const data = lines
+          const nameList = lines
             .map((line) => {
-              return line.split(",").map((cell) => cell.trim().replace(/"/g, ""))
+              const columns = line.split(",")
+              return columns[0].trim().replace(/"/g, "")
             })
-            .filter((row) => row.some((cell) => cell.length > 0))
+            .filter((name) => name && name.length > 0)
 
-          if (data.length === 0) {
-            addLog("warning", "No valid data found in the CSV file")
+          if (nameList.length === 0) {
+            addLog("warning", "No valid names found in the CSV file")
             return
           }
 
-          setRecipientData(data)
-          setDataInput(data.map((row) => row.join("\t")).join("\n"))
-          addLog("success", `Loaded ${data.length} rows with ${data[0]?.length || 0} columns from CSV file`)
+          setNames(nameList)
+          setNameInput(nameList.join("\n"))
+          addLog("success", `Loaded ${nameList.length} names from CSV file`)
         } catch (error) {
           addLog("error", "Failed to parse CSV file. Please check the format")
         }
@@ -476,27 +470,20 @@ export default function CertificateGenerator() {
     [addLog, drawCanvas],
   )
 
-  const parseDataFromText = useCallback(
+  const parseNamesFromText = useCallback(
     (text: string) => {
       try {
-        const lines = text
+        const nameList = text
           .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0)
-        const data = lines.map((line) => {
-          // Split by comma, tab, or multiple spaces
-          return line
-            .split(/[,\t]+|\s{2,}/)
-            .map((cell) => cell.trim())
-            .filter((cell) => cell.length > 0)
-        })
+          .map((name) => name.trim())
+          .filter((name) => name && name.length > 0)
 
-        setRecipientData(data)
-        if (data.length > 0) {
-          addLog("info", `Parsed ${data.length} rows with ${data[0]?.length || 0} columns`)
+        setNames(nameList)
+        if (nameList.length > 0) {
+          addLog("info", `Parsed ${nameList.length} names from input`)
         }
       } catch {
-        addLog("error", "Failed to parse data from text input")
+        addLog("error", "Failed to parse names from text input")
       }
     },
     [addLog],
@@ -592,7 +579,7 @@ export default function CertificateGenerator() {
                 ...t,
                 id: Date.now().toString(),
                 name: `Text Area ${prev.filter((a) => a.id !== "temp").length + 1}`,
-                content: `Column ${prev.filter((a) => a.id !== "temp").length + 1}`,
+                content: "",
               }
               setSelectedAreaId(newArea.id)
               addLog("success", `Created new text area: ${newArea.name}`)
@@ -614,128 +601,110 @@ export default function CertificateGenerator() {
     [templateImage, nameAreas, selectedAreaId, canvasScale, isSelecting, addLog],
   )
 
-  const generateCertificate = useCallback(
-    (rowData: string[]): Promise<Blob> => {
-      return new Promise((resolve, reject) => {
-        try {
-          const canvas = document.createElement("canvas")
-          const ctx = canvas.getContext("2d")
-          if (!ctx || !templateImage) {
-            reject(new Error("Canvas context not available"))
-            return
-          }
-
-          const img = new Image()
-          img.crossOrigin = "anonymous"
-          img.onload = () => {
-            try {
-              canvas.width = img.width
-              canvas.height = img.height
-              ctx.drawImage(img, 0, 0)
-
-              nameAreas.forEach((area, areaIndex) => {
-                ctx.fillStyle = textSettings.color
-                let fontStyle = ""
-                if (textSettings.bold) fontStyle += "bold "
-                if (textSettings.italic) fontStyle += "italic "
-                ctx.font = `${fontStyle}${textSettings.size}px ${textSettings.font}`
-                ctx.textAlign = textSettings.align
-
-                if (textSettings.shadow) {
-                  ctx.shadowColor = textSettings.shadowColor
-                  ctx.shadowBlur = textSettings.shadowBlur
-                  ctx.shadowOffsetX = textSettings.shadowOffsetX
-                  ctx.shadowOffsetY = textSettings.shadowOffsetY
-                } else {
-                  ctx.shadowBlur = 0
-                  ctx.shadowOffsetX = 0
-                  ctx.shadowOffsetY = 0
-                }
-
-                let textX = area.x
-                if (textSettings.align === "center") textX = area.x + area.width / 2
-                else if (textSettings.align === "right") textX = area.x + area.width
-                const textY = area.y + area.height / 2 + textSettings.size / 3
-
-                // Use the specific data for this area and row
-                const text = rowData[areaIndex] || area.content || ""
-
-                if (textSettings.underline) {
-                  const m = ctx.measureText(text)
-                  const underlineY = textY + 4
-                  ctx.beginPath()
-                  let underlineX = textX
-                  if (textSettings.align === "center") underlineX = textX - m.width / 2
-                  else if (textSettings.align === "right") underlineX = textX - m.width
-                  ctx.moveTo(underlineX, underlineY)
-                  ctx.lineTo(underlineX + m.width, underlineY)
-                  ctx.strokeStyle = textSettings.color
-                  ctx.lineWidth = 2
-                  ctx.stroke()
-                }
-                ctx.fillText(text, textX, textY)
-              })
-
-              canvas.toBlob(
-                (blob) => {
-                  if (blob) resolve(blob)
-                  else reject(new Error("Failed to generate certificate blob"))
-                },
-                "image/png",
-                0.95,
-              )
-            } catch (error) {
-              reject(error)
-            }
-          }
-          img.onerror = () => reject(new Error("Failed to load template image"))
-          img.src = templateImage
-        } catch (error) {
-          reject(error)
+  const generateCertificate = useCallback((): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      try {
+        const canvas = document.createElement("canvas")
+        const ctx = canvas.getContext("2d")
+        if (!ctx || !templateImage) {
+          reject(new Error("Canvas context not available"))
+          return
         }
-      })
-    },
-    [templateImage, nameAreas, textSettings],
-  )
 
-  const generateAllCertificates = useCallback(async () => {
-    if (!templateImage || nameAreas.length === 0 || recipientData.length === 0) {
-      addLog("error", "Missing required data: template, text areas, or recipient data")
+        const img = new Image()
+        img.crossOrigin = "anonymous"
+        img.onload = () => {
+          try {
+            canvas.width = img.width
+            canvas.height = img.height
+            ctx.drawImage(img, 0, 0)
+
+            nameAreas.forEach((area) => {
+              ctx.fillStyle = textSettings.color
+              let fontStyle = ""
+              if (textSettings.bold) fontStyle += "bold "
+              if (textSettings.italic) fontStyle += "italic "
+              ctx.font = `${fontStyle}${textSettings.size}px ${textSettings.font}`
+              ctx.textAlign = textSettings.align
+
+              if (textSettings.shadow) {
+                ctx.shadowColor = textSettings.shadowColor
+                ctx.shadowBlur = textSettings.shadowBlur
+                ctx.shadowOffsetX = textSettings.shadowOffsetX
+                ctx.shadowOffsetY = textSettings.shadowOffsetY
+              } else {
+                ctx.shadowBlur = 0
+                ctx.shadowOffsetX = 0
+                ctx.shadowOffsetY = 0
+              }
+
+              let textX = area.x
+              if (textSettings.align === "center") textX = area.x + area.width / 2
+              else if (textSettings.align === "right") textX = area.x + area.width
+              const textY = area.y + area.height / 2 + textSettings.size / 3
+
+              const displayText = area.content || "Sample Text"
+
+              if (textSettings.underline) {
+                const m = ctx.measureText(displayText)
+                const underlineY = textY + 4
+                ctx.beginPath()
+                let underlineX = textX
+                if (textSettings.align === "center") underlineX = textX - m.width / 2
+                else if (textSettings.align === "right") underlineX = textX - m.width
+                ctx.moveTo(underlineX, underlineY)
+                ctx.lineTo(underlineX + m.width, underlineY)
+                ctx.strokeStyle = textSettings.color
+                ctx.lineWidth = 2
+                ctx.stroke()
+              }
+              ctx.fillText(displayText, textX, textY)
+            })
+
+            canvas.toBlob(
+              (blob) => {
+                if (blob) resolve(blob)
+                else reject(new Error("Failed to generate certificate blob"))
+              },
+              "image/png",
+              0.95,
+            )
+          } catch (error) {
+            reject(error)
+          }
+        }
+        img.onerror = () => reject(new Error("Failed to load template image"))
+        img.src = templateImage
+      } catch (error) {
+        reject(error)
+      }
+    })
+  }, [templateImage, nameAreas, textSettings])
+
+  const generateCertificateDownload = useCallback(async () => {
+    if (!templateImage || nameAreas.length === 0) {
+      addLog("error", "Missing required data: template or text areas")
       return
     }
     setIsGenerating(true)
     setGenerationProgress(0)
-    addLog("info", `Starting generation of ${recipientData.length} certificates`)
+    addLog("info", "Starting certificate generation")
     try {
-      const zip = new JSZip()
-      for (let i = 0; i < recipientData.length; i++) {
-        const rowData = recipientData[i]
-        try {
-          const blob = await generateCertificate(rowData)
-          const fileName = rowData[0] || `Certificate_${i + 1}`
-          zip.file(`${fileName} - Certificate.png`, blob)
-          setGenerationProgress(((i + 1) / recipientData.length) * 100)
-          addLog("info", `Generated certificate for: ${fileName}`)
-        } catch (error) {
-          addLog("error", `Failed to generate certificate for row ${i + 1}: ${error}`)
-        }
-      }
-      addLog("info", "Creating ZIP file...")
-      const zipBlob = await zip.generateAsync({ type: "blob" })
-      const url = URL.createObjectURL(zipBlob)
+      const blob = await generateCertificate()
+      const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `certificates-${new Date().toISOString().split("T")[0]}.zip`
+      a.download = `certificate-${new Date().toISOString().split("T")[0]}.png`
       a.click()
       URL.revokeObjectURL(url)
-      addLog("success", `Successfully generated and downloaded ${recipientData.length} certificates`)
+      addLog("success", "Certificate generated and downloaded successfully")
     } catch (error) {
-      addLog("error", `Failed to generate certificates: ${error}`)
+      addLog("error", `Failed to generate certificate: ${error}`)
     } finally {
       setIsGenerating(false)
       setGenerationProgress(0)
     }
-  }, [templateImage, nameAreas, recipientData, generateCertificate, addLog])
+  }, [templateImage, nameAreas, generateCertificate, addLog])
 
   const deleteSelectedArea = useCallback(() => {
     if (!selectedAreaId) return
@@ -752,9 +721,9 @@ export default function CertificateGenerator() {
       ...selected,
       id: Date.now().toString(),
       name: `${selected.name} Copy`,
+      content: selected.content, // Add this line
       x: selected.x + 20,
       y: selected.y + 20,
-      content: selected.content,
     }
     setNameAreas((prev) => [...prev, newArea])
     setSelectedAreaId(newArea.id)
@@ -919,25 +888,6 @@ export default function CertificateGenerator() {
 
                         {selectedAreaId === area.id && (
                           <div className="mt-2 space-y-2">
-                            <div>
-                              <Label htmlFor={`area-content-${area.id}`} className="text-xs text-gray-400">
-                                Content/Column Label
-                              </Label>
-                              <Input
-                                id={`area-content-${area.id}`}
-                                type="text"
-                                value={area.content}
-                                onChange={(e) => {
-                                  const newContent = e.target.value
-                                  setNameAreas((prev) =>
-                                    prev.map((a) => (a.id === area.id ? { ...a, content: newContent } : a)),
-                                  )
-                                  drawCanvas()
-                                }}
-                                placeholder="e.g., Name, Roll Number, etc."
-                                className="text-sm bg-gray-800 border-gray-600 text-white"
-                              />
-                            </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div>
                                 <Label htmlFor={`area-x-${area.id}`} className="text-xs text-gray-400">
@@ -1010,6 +960,25 @@ export default function CertificateGenerator() {
                                 />
                               </div>
                             </div>
+                            <div>
+                              <Label htmlFor={`area-content-${area.id}`} className="text-xs text-gray-400">
+                                Content
+                              </Label>
+                              <Input
+                                id={`area-content-${area.id}`}
+                                type="text"
+                                value={area.content}
+                                placeholder="Enter text content..."
+                                onChange={(e) => {
+                                  const newContent = e.target.value
+                                  setNameAreas((prev) =>
+                                    prev.map((a) => (a.id === area.id ? { ...a, content: newContent } : a)),
+                                  )
+                                  drawCanvas()
+                                }}
+                                className="text-sm bg-gray-800 border-gray-600 text-white"
+                              />
+                            </div>
                           </div>
                         )}
 
@@ -1019,52 +988,6 @@ export default function CertificateGenerator() {
                       </div>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Names */}
-              <Card className="bg-gray-700 border-gray-600 shadow-lg">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2 text-white">
-                    <Users className="w-4 h-4 text-teal-400" />
-                    Recipients ({recipientData.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <Label htmlFor="data" className="text-xs text-gray-300">
-                      Data (one row per line, columns separated by commas or tabs)
-                    </Label>
-                    <Textarea
-                      id="data"
-                      placeholder={"John Doe,12345,Grade A\nJane Smith,12346,Grade B\nMike Johnson,12347,Grade A"}
-                      value={dataInput}
-                      onChange={(e) => {
-                        setDataInput(e.target.value)
-                        parseDataFromText(e.target.value)
-                      }}
-                      rows={4}
-                      className="text-sm bg-gray-800 border-gray-600 text-white"
-                    />
-                  </div>
-                  <div className="text-center">
-                    <span className="text-xs text-gray-500">or</span>
-                  </div>
-                  <Button
-                    onClick={() => csvInputRef.current?.click()}
-                    variant="outline"
-                    className="w-full border-gray-600 text-white hover:bg-gray-600"
-                    size="sm"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload CSV
-                  </Button>
-                  <input ref={csvInputRef} type="file" accept=".csv" onChange={handleCSVUpload} className="hidden" />
-                  {recipientData.length > 0 && (
-                    <div className="text-xs text-gray-400 bg-gray-800/30 p-2 rounded border border-gray-700">
-                      Preview: {recipientData[0]?.join(" | ") || "No data"}
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             </div>
@@ -1305,11 +1228,7 @@ export default function CertificateGenerator() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-white">{recipientData.length}</div>
-                <div className="text-xs text-gray-400">Recipients</div>
-              </div>
+            <div className="grid grid-cols-1 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold text-white">{nameAreas.length}</div>
                 <div className="text-xs text-gray-400">Text Areas</div>
@@ -1327,8 +1246,8 @@ export default function CertificateGenerator() {
             )}
 
             <Button
-              onClick={generateAllCertificates}
-              disabled={!templateImage || nameAreas.length === 0 || recipientData.length === 0 || isGenerating}
+              onClick={generateCertificateDownload}
+              disabled={!templateImage || nameAreas.length === 0 || isGenerating}
               className="w-full bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-600 disabled:text-gray-400"
               size="lg"
             >
@@ -1337,16 +1256,15 @@ export default function CertificateGenerator() {
               ) : (
                 <>
                   <Download className="w-4 h-4 mr-2" />
-                  Generate & Download
+                  Generate Certificate
                 </>
               )}
             </Button>
 
-            {(!templateImage || nameAreas.length === 0 || recipientData.length === 0) && (
+            {(!templateImage || nameAreas.length === 0) && (
               <div className="text-xs text-gray-400 text-center space-y-1">
                 {!templateImage && <div>{"•"} Upload a template</div>}
                 {nameAreas.length === 0 && <div>{"•"} Add text areas</div>}
-                {recipientData.length === 0 && <div>{"•"} Add recipient data</div>}
               </div>
             )}
           </CardContent>
@@ -1366,10 +1284,6 @@ export default function CertificateGenerator() {
             <div className="flex justify-between text-xs">
               <span className="text-gray-400">Text Areas:</span>
               <span className="text-white">{nameAreas.length}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-400">Recipients:</span>
-              <span className="text-white">{recipientData.length}</span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-gray-400">Font:</span>
