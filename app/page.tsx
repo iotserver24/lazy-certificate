@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Slider } from "@/components/ui/slider"
+
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
@@ -230,13 +230,6 @@ export default function CertificateGenerator() {
   }, [])
 
   // Simple canvas update without debouncing for now
-  const triggerCanvasUpdate = useCallback(() => {
-    // Use requestAnimationFrame for better performance
-    requestAnimationFrame(() => {
-      drawCanvas()
-    })
-  }, [])
-
   const addDefaultTextArea = useCallback(() => {
     if (!templateImage) {
       addLog("error", "Please upload a template image first to add a text area.")
@@ -277,6 +270,10 @@ export default function CertificateGenerator() {
 
     const ctx = canvas.getContext("2d")
     if (!ctx) return
+
+    // Prevent excessive redraws
+    if (canvas.dataset.isDrawing === 'true') return
+    canvas.dataset.isDrawing = 'true'
 
 
 
@@ -410,9 +407,27 @@ export default function CertificateGenerator() {
 
         ctx.fillText(displayText, textX, textY)
       })
+      
+      // Reset drawing flag
+      canvas.dataset.isDrawing = 'false'
     }
     img.src = templateImage
   }, [templateImage, nameAreas, selectedAreaId, textSettings, previewName, showGrid, zoomLevel, canvasScale])
+
+  // Debounced canvas update to prevent excessive redraws
+  const debouncedCanvasUpdate = useRef<NodeJS.Timeout | null>(null)
+  
+  const triggerCanvasUpdate = useCallback(() => {
+    // Clear any pending update
+    if (debouncedCanvasUpdate.current) {
+      clearTimeout(debouncedCanvasUpdate.current)
+    }
+    
+    // Debounce the canvas update
+    debouncedCanvasUpdate.current = setTimeout(() => {
+      drawCanvas()
+    }, 100) // 100ms delay
+  }, [drawCanvas])
 
   const handleImageUpload = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -438,6 +453,7 @@ export default function CertificateGenerator() {
           setNameAreas([])
           setSelectedAreaId(null)
           addLog("success", `Template uploaded successfully (${img.width}x${img.height}px)`)
+          // Use immediate draw for template upload
           drawCanvas()
         }
         img.onerror = () => {
@@ -531,7 +547,8 @@ export default function CertificateGenerator() {
                 addLog("info", `Font "${fontName}" was already loaded.`)
                 return prev
               })
-              drawCanvas()
+              // Use debounced update for font loading
+              triggerCanvasUpdate()
             })
             .catch((error) => {
               addLog("error", `Failed to load custom font "${fontName}": ${error.message}`)
@@ -909,6 +926,7 @@ export default function CertificateGenerator() {
   }, [])
 
   useEffect(() => {
+    // Initial canvas draw
     drawCanvas()
   }, [drawCanvas])
 
@@ -916,6 +934,13 @@ export default function CertificateGenerator() {
 
   useEffect(() => {
     addLog("info", "Certificate Generator initialized. Upload a template to get started!")
+    
+    // Cleanup function to clear any pending canvas updates
+    return () => {
+      if (debouncedCanvasUpdate.current) {
+        clearTimeout(debouncedCanvasUpdate.current)
+      }
+    }
   }, [addLog])
 
   const allAvailableFonts = [...GOOGLE_FONTS, ...customFonts]
@@ -1136,10 +1161,8 @@ export default function CertificateGenerator() {
                                   setNameAreas((prev) =>
                                     prev.map((a) => (a.id === area.id ? { ...a, content: newContent } : a)),
                                   )
-                                  // Use requestAnimationFrame for smooth updates
-                                  requestAnimationFrame(() => {
-                                    drawCanvas()
-                                  })
+                                  // Use debounced update for smooth performance
+                                  triggerCanvasUpdate()
                                 }}
                                 className="text-sm bg-gray-800 border-gray-600 text-white"
                               />
@@ -1149,19 +1172,21 @@ export default function CertificateGenerator() {
                             <div className="space-y-3">
                               <div>
                                 <Label className="text-xs text-gray-400">Font Size: {area.fontSize}px</Label>
-                                <Slider
-                                  value={[area.fontSize]}
-                                  onValueChange={([value]) => {
+                                <Input
+                                  type="number"
+                                  value={area.fontSize}
+                                  onChange={(e) => {
+                                    const value = parseInt(e.target.value) || 8
+                                    const clampedValue = Math.max(8, Math.min(200, value))
                                     setNameAreas((prev) =>
-                                      prev.map((a) => (a.id === area.id ? { ...a, fontSize: value } : a))
+                                      prev.map((a) => (a.id === area.id ? { ...a, fontSize: clampedValue } : a))
                                     )
-                                    // Immediate update for sliders
-                                    drawCanvas()
+                                    // Use debounced update for smooth performance
+                                    triggerCanvasUpdate()
                                   }}
                                   min={8}
                                   max={200}
-                                  step={1}
-                                  className="mt-2"
+                                  className="text-sm bg-gray-800 border-gray-600 text-white"
                                 />
                               </div>
                               
@@ -1216,8 +1241,8 @@ export default function CertificateGenerator() {
                                     setNameAreas((prev) =>
                                       prev.map((a) => (a.id === area.id ? { ...a, autoSize: checked } : a))
                                     )
-                                    // Immediate update for toggles
-                                    drawCanvas()
+                                    // Use debounced update for smooth performance
+                                    triggerCanvasUpdate()
                                   }}
                                 />
                                 <Label className="text-xs text-gray-400 cursor-pointer">Auto-size text to fit box</Label>
@@ -1227,12 +1252,13 @@ export default function CertificateGenerator() {
                                 <div className="flex items-center space-x-2">
                                   <Switch
                                     checked={area.bold}
-                                    onCheckedChange={(checked) => {
-                                      setNameAreas((prev) =>
-                                        prev.map((a) => (a.id === area.id ? { ...a, bold: checked } : a))
-                                      )
-                                      triggerCanvasUpdate()
-                                    }}
+                                                                      onCheckedChange={(checked) => {
+                                    setNameAreas((prev) =>
+                                      prev.map((a) => (a.id === area.id ? { ...a, bold: checked } : a))
+                                    )
+                                    // Use debounced update for smooth performance
+                                    triggerCanvasUpdate()
+                                  }}
                                   />
                                   <Label className="text-xs text-gray-400 cursor-pointer">Bold</Label>
                                 </div>
@@ -1385,16 +1411,18 @@ export default function CertificateGenerator() {
 
                   <div>
                     <Label className="text-xs text-gray-300 font-medium">Size: {textSettings.size}px</Label>
-                    <Slider
-                      value={[textSettings.size]}
-                      onValueChange={([value]) => {
-                        setTextSettings((prev) => ({ ...prev, size: value }))
+                    <Input
+                      type="number"
+                      value={textSettings.size}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value) || 12
+                        const clampedValue = Math.max(12, Math.min(200, value))
+                        setTextSettings((prev) => ({ ...prev, size: clampedValue }))
                         triggerCanvasUpdate()
                       }}
                       min={12}
                       max={200}
-                      step={1}
-                      className="mt-2"
+                      className="text-sm bg-gray-800 border-gray-600 text-white mt-2"
                     />
                   </div>
 
@@ -1507,33 +1535,48 @@ export default function CertificateGenerator() {
                       </div>
                       <div>
                         <Label className="text-xs text-gray-300">Blur: {textSettings.shadowBlur}px</Label>
-                        <Slider
-                          value={[textSettings.shadowBlur]}
-                          onValueChange={([value]) => setTextSettings((prev) => ({ ...prev, shadowBlur: value }))}
+                        <Input
+                          type="number"
+                          value={textSettings.shadowBlur}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 0
+                            const clampedValue = Math.max(0, Math.min(20, value))
+                            setTextSettings((prev) => ({ ...prev, shadowBlur: clampedValue }))
+                          }}
                           min={0}
                           max={20}
-                          step={1}
+                          className="text-sm bg-gray-800 border-gray-600 text-white"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <Label className="text-xs text-gray-300">X: {textSettings.shadowOffsetX}px</Label>
-                          <Slider
-                            value={[textSettings.shadowOffsetX]}
-                            onValueChange={([value]) => setTextSettings((prev) => ({ ...prev, shadowOffsetX: value }))}
+                          <Input
+                            type="number"
+                            value={textSettings.shadowOffsetX}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value) || 0
+                              const clampedValue = Math.max(-10, Math.min(10, value))
+                              setTextSettings((prev) => ({ ...prev, shadowOffsetX: clampedValue }))
+                            }}
                             min={-10}
                             max={10}
-                            step={1}
+                            className="text-sm bg-gray-800 border-gray-600 text-white"
                           />
                         </div>
                         <div>
                           <Label className="text-xs text-gray-300">Y: {textSettings.shadowOffsetY}px</Label>
-                          <Slider
-                            value={[textSettings.shadowOffsetY]}
-                            onValueChange={([value]) => setTextSettings((prev) => ({ ...prev, shadowOffsetY: value }))}
+                          <Input
+                            type="number"
+                            value={textSettings.shadowOffsetY}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value) || 0
+                              const clampedValue = Math.max(-10, Math.min(10, value))
+                              setTextSettings((prev) => ({ ...prev, shadowOffsetY: clampedValue }))
+                            }}
                             min={-10}
                             max={10}
-                            step={1}
+                            className="text-sm bg-gray-800 border-gray-600 text-white"
                           />
                         </div>
                       </div>
