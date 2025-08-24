@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
+import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
@@ -19,6 +20,7 @@ import {
   Upload,
   Download,
   FileImage,
+  Users,
   Palette,
   Type,
   Trash2,
@@ -38,8 +40,6 @@ import {
 } from "lucide-react"
 import LogViewer from "@/components/log-viewer"
 import { cn } from "@/lib/utils"
-import JSZip from "jszip"
-import { saveAs } from "file-saver"
 
 interface TextSettings {
   font: string
@@ -65,15 +65,7 @@ interface NameArea {
   height: number
   id: string
   name: string
-  content: string
-  fontSize: number // Individual font size for each area
-  fontFamily: string // Individual font family for each area
-  color: string // Individual color for each area
-  bold: boolean // Individual bold setting
-  italic: boolean // Individual italic setting
-  underline: boolean // Individual underline setting
-  align: "left" | "center" | "right" // Individual alignment
-  autoSize: boolean // Whether to auto-size text to fit box
+  content: string // Add this new field
 }
 
 export interface LogEntry {
@@ -136,11 +128,12 @@ export default function CertificateGenerator() {
     letterSpacing: 0,
     lineHeight: 1.2,
   })
+  const [names, setNames] = useState<string[]>([])
+  const [nameInput, setNameInput] = useState("")
+  const [isSelecting, setIsSelecting] = useState(false)
   const [previewName, setPreviewName] = useState("John Doe")
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState(0)
-  const [generationStartTime, setGenerationStartTime] = useState<Date | null>(null)
-  const [completedCertificates, setCompletedCertificates] = useState(0)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [canvasScale, setCanvasScale] = useState(1)
   const [showGrid, setShowGrid] = useState(false)
@@ -148,9 +141,6 @@ export default function CertificateGenerator() {
   const [customFonts, setCustomFonts] = useState<string[]>([])
   const [zoomLevel, setZoomLevel] = useState(1.0)
   const [isDesktop, setIsDesktop] = useState(true)
-  const [isSelecting, setIsSelecting] = useState(false)
-  const [names, setNames] = useState<string[]>([])
-  const [nameInput, setNameInput] = useState("")
 
   const getIsBlockedMobile = () => {
     if (typeof window === "undefined") return false
@@ -195,41 +185,6 @@ export default function CertificateGenerator() {
     setLogs((prev) => [newLog, ...prev.slice(0, 49)])
   }, [])
 
-  // Function to calculate optimal font size for text to fit within a box
-  const calculateOptimalFontSize = useCallback((text: string, area: NameArea, ctx: CanvasRenderingContext2D) => {
-    if (!text.trim()) return area.fontSize
-    
-    const maxWidth = area.width * 0.9 // Leave 10% margin
-    const maxHeight = area.height * 0.8 // Leave 20% margin for line height
-    
-    let fontSize = area.fontSize
-    let fontStyle = ""
-    if (area.bold) fontStyle += "bold "
-    if (area.italic) fontStyle += "italic "
-    
-    // Binary search for optimal font size
-    let minSize = 8
-    let maxSize = Math.min(200, Math.max(area.width, area.height))
-    
-    while (minSize <= maxSize) {
-      fontSize = Math.floor((minSize + maxSize) / 2)
-      ctx.font = `${fontStyle}${fontSize}px ${area.fontFamily}`
-      
-      const metrics = ctx.measureText(text)
-      const textWidth = metrics.width
-      const textHeight = fontSize * 1.2 // Approximate line height
-      
-      if (textWidth <= maxWidth && textHeight <= maxHeight) {
-        minSize = fontSize + 1
-      } else {
-        maxSize = fontSize - 1
-      }
-    }
-    
-    return Math.max(8, maxSize)
-  }, [])
-
-  // Simple canvas update without debouncing for now
   const addDefaultTextArea = useCallback(() => {
     if (!templateImage) {
       addLog("error", "Please upload a template image first to add a text area.")
@@ -243,19 +198,11 @@ export default function CertificateGenerator() {
     const newArea: NameArea = {
       id: Date.now().toString(),
       name: `Text Area ${nameAreas.length + 1}`,
-      content: "",
+      content: nameAreas.length === 0 ? "John Doe" : `Text ${nameAreas.length + 1}`, // Default content
       x: defaultX,
       y: defaultY,
       width: defaultWidth,
       height: defaultHeight,
-      fontSize: 48,
-      fontFamily: "Montserrat",
-      color: "#ffffff",
-      bold: false,
-      italic: false,
-      underline: false,
-      align: "center",
-      autoSize: true,
     }
 
     setNameAreas((prev) => [...prev, newArea])
@@ -263,19 +210,13 @@ export default function CertificateGenerator() {
     addLog("success", `Added new text area: ${newArea.name}`)
   }, [templateImage, templateDimensions, nameAreas.length, addLog])
 
-  const drawCanvas = useCallback((skipRerender = false) => {
+  const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current
     const mainContent = mainContentRef.current
     if (!canvas || !templateImage || !mainContent) return
 
     const ctx = canvas.getContext("2d")
     if (!ctx) return
-
-    // Prevent excessive redraws
-    if (canvas.dataset.isDrawing === 'true') return
-    canvas.dataset.isDrawing = 'true'
-
-
 
     const img = new Image()
     img.crossOrigin = "anonymous"
@@ -341,29 +282,13 @@ export default function CertificateGenerator() {
         ctx.setLineDash([])
         ctx.fillText(area.name, scaledArea.x, scaledArea.y - 5)
 
-        // Get preview text - use first certificate data if available
-        let displayText = area.content || area.name || "Sample Text"
-        if (names.length > 0 && names[0]) {
-          const values = names[0].split(',').map(val => val.trim())
-          if (values[nameAreas.indexOf(area)] !== undefined) {
-            displayText = values[nameAreas.indexOf(area)]
-          }
-        }
-        
-        // Calculate optimal font size if auto-size is enabled
-        let finalFontSize = area.fontSize
-        if (area.autoSize && displayText.trim()) {
-          finalFontSize = calculateOptimalFontSize(displayText, area, ctx)
-        }
-
-        ctx.fillStyle = area.color
+        ctx.fillStyle = textSettings.color
         let fontStyle = ""
-        if (area.bold) fontStyle += "bold "
-        if (area.italic) fontStyle += "italic "
-        ctx.font = `${fontStyle}${finalFontSize * effectiveScale}px ${area.fontFamily}`
-        ctx.textAlign = area.align
+        if (textSettings.bold) fontStyle += "bold "
+        if (textSettings.italic) fontStyle += "italic "
+        ctx.font = `${fontStyle}${textSettings.size * effectiveScale}px ${textSettings.font}`
+        ctx.textAlign = textSettings.align
 
-        // Apply shadow if enabled (using global settings for now)
         if (textSettings.shadow) {
           ctx.shadowColor = textSettings.shadowColor
           ctx.shadowBlur = textSettings.shadowBlur * effectiveScale
@@ -377,57 +302,39 @@ export default function CertificateGenerator() {
         }
 
         let textX = scaledArea.x
-        if (area.align === "center") {
+        if (textSettings.align === "center") {
           textX = scaledArea.x + scaledArea.width / 2
-        } else if (area.align === "right") {
+        } else if (textSettings.align === "right") {
           textX = scaledArea.x + scaledArea.width
         }
 
-        const textY = scaledArea.y + scaledArea.height / 2 + (finalFontSize * effectiveScale) / 3
+        const textY = scaledArea.y + scaledArea.height / 2 + (textSettings.size * effectiveScale) / 3
 
-        if (area.underline) {
-          const metrics = ctx.measureText(displayText)
+        if (textSettings.underline) {
+          const metrics = ctx.measureText(area.content || "Sample Text")
           const underlineY = textY + 4
           ctx.beginPath()
           let underlineX = textX
           const underlineWidth = metrics.width
 
-          if (area.align === "center") {
+          if (textSettings.align === "center") {
             underlineX = textX - metrics.width / 2
-          } else if (area.align === "right") {
+          } else if (textSettings.align === "right") {
             underlineX = textX - metrics.width
           }
 
           ctx.moveTo(underlineX, underlineY)
           ctx.lineTo(underlineX + underlineWidth, underlineY)
-          ctx.strokeStyle = area.color
+          ctx.strokeStyle = textSettings.color
           ctx.lineWidth = 2
           ctx.stroke()
         }
 
-        ctx.fillText(displayText, textX, textY)
+        ctx.fillText(area.content || "Sample Text", textX, textY)
       })
-      
-      // Reset drawing flag
-      canvas.dataset.isDrawing = 'false'
     }
     img.src = templateImage
-  }, [templateImage, nameAreas, selectedAreaId, textSettings, previewName, showGrid, zoomLevel, canvasScale])
-
-  // Debounced canvas update to prevent excessive redraws
-  const debouncedCanvasUpdate = useRef<NodeJS.Timeout | null>(null)
-  
-  const triggerCanvasUpdate = useCallback(() => {
-    // Clear any pending update
-    if (debouncedCanvasUpdate.current) {
-      clearTimeout(debouncedCanvasUpdate.current)
-    }
-    
-    // Debounce the canvas update
-    debouncedCanvasUpdate.current = setTimeout(() => {
-      drawCanvas()
-    }, 100) // 100ms delay
-  }, [drawCanvas])
+  }, [templateImage, nameAreas, selectedAreaId, textSettings, previewName, showGrid, zoomLevel])
 
   const handleImageUpload = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -453,7 +360,6 @@ export default function CertificateGenerator() {
           setNameAreas([])
           setSelectedAreaId(null)
           addLog("success", `Template uploaded successfully (${img.width}x${img.height}px)`)
-          // Use immediate draw for template upload
           drawCanvas()
         }
         img.onerror = () => {
@@ -547,8 +453,7 @@ export default function CertificateGenerator() {
                 addLog("info", `Font "${fontName}" was already loaded.`)
                 return prev
               })
-              // Use debounced update for font loading
-              triggerCanvasUpdate()
+              drawCanvas()
             })
             .catch((error) => {
               addLog("error", `Failed to load custom font "${fontName}": ${error.message}`)
@@ -568,17 +473,17 @@ export default function CertificateGenerator() {
   const parseNamesFromText = useCallback(
     (text: string) => {
       try {
-        const lines = text
+        const nameList = text
           .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line && line.length > 0)
+          .map((name) => name.trim())
+          .filter((name) => name && name.length > 0)
 
-        setNames(lines)
-        if (lines.length > 0) {
-          addLog("info", `Parsed ${lines.length} certificate entries from input`)
+        setNames(nameList)
+        if (nameList.length > 0) {
+          addLog("info", `Parsed ${nameList.length} names from input`)
         }
       } catch {
-        addLog("error", "Failed to parse certificate data from text input")
+        addLog("error", "Failed to parse names from text input")
       }
     },
     [addLog],
@@ -661,20 +566,7 @@ export default function CertificateGenerator() {
           const x = Math.min(startX, currX)
           const y = Math.min(startY, currY)
 
-          const temp: NameArea = { 
-            id: "temp", 
-            name: "New Area", 
-            x, y, width, height, 
-            content: "",
-            fontSize: 48,
-            fontFamily: "Montserrat",
-            color: "#ffffff",
-            bold: false,
-            italic: false,
-            underline: false,
-            align: "center",
-            autoSize: true,
-          }
+          const temp: NameArea = { id: "temp", name: "New Area", x, y, width, height, content: "" }
           setNameAreas((prev) => [...prev.filter((a) => a.id !== "temp"), temp])
         }
         const onUp = () => {
@@ -709,167 +601,111 @@ export default function CertificateGenerator() {
     [templateImage, nameAreas, selectedAreaId, canvasScale, isSelecting, addLog],
   )
 
-  const generateCertificate = useCallback((certificateIndex: number = 0): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      try {
-        const canvas = document.createElement("canvas")
-        const ctx = canvas.getContext("2d")
-        if (!ctx || !templateImage) {
-          reject(new Error("Canvas context not available"))
-          return
-        }
-
-        const img = new Image()
-        img.crossOrigin = "anonymous"
-        img.onload = () => {
-          try {
-            canvas.width = img.width
-            canvas.height = img.height
-            ctx.drawImage(img, 0, 0)
-
-            // Get the certificate data for this index
-            const certificateData = names[certificateIndex]
-            if (!certificateData) {
-              reject(new Error(`No certificate data found for index ${certificateIndex}`))
-              return
-            }
-
-            // Split the certificate data by commas
-            const values = certificateData.split(',').map(val => val.trim())
-
-            nameAreas.forEach((area, areaIndex) => {
-              // Get the value for this area (use areaIndex to get the corresponding value)
-              let displayText = values[areaIndex] || area.content || "Sample Text"
-
-              // Calculate optimal font size if auto-size is enabled
-              let finalFontSize = area.fontSize
-              if (area.autoSize && displayText.trim()) {
-                finalFontSize = calculateOptimalFontSize(displayText, area, ctx)
-              }
-
-              ctx.fillStyle = area.color
-              let fontStyle = ""
-              if (area.bold) fontStyle += "bold "
-              if (area.italic) fontStyle += "italic "
-              ctx.font = `${fontStyle}${finalFontSize}px ${area.fontFamily}`
-              ctx.textAlign = area.align
-
-              if (textSettings.shadow) {
-                ctx.shadowColor = textSettings.shadowColor
-                ctx.shadowBlur = textSettings.shadowBlur
-                ctx.shadowOffsetX = textSettings.shadowOffsetX
-                ctx.shadowOffsetY = textSettings.shadowOffsetY
-              } else {
-                ctx.shadowBlur = 0
-                ctx.shadowOffsetX = 0
-                ctx.shadowOffsetY = 0
-              }
-
-              let textX = area.x
-              if (area.align === "center") textX = area.x + area.width / 2
-              else if (area.align === "right") textX = area.x + area.width
-              const textY = area.y + area.height / 2 + finalFontSize / 3
-
-              if (area.underline) {
-                const m = ctx.measureText(displayText)
-                const underlineY = textY + 4
-                ctx.beginPath()
-                let underlineX = textX
-                if (area.align === "center") underlineX = textX - m.width / 2
-                else if (area.align === "right") underlineX = textX - m.width
-                ctx.moveTo(underlineX, underlineY)
-                ctx.lineTo(underlineX + m.width, underlineY)
-                ctx.strokeStyle = area.color
-                ctx.lineWidth = 2
-                ctx.stroke()
-              }
-              ctx.fillText(displayText, textX, textY)
-            })
-
-            canvas.toBlob(
-              (blob) => {
-                if (blob) resolve(blob)
-                else reject(new Error("Failed to generate certificate blob"))
-              },
-              "image/png",
-              0.95,
-            )
-          } catch (error) {
-            reject(error)
+  const generateCertificate = useCallback(
+    (name: string): Promise<Blob> => {
+      return new Promise((resolve, reject) => {
+        try {
+          const canvas = document.createElement("canvas")
+          const ctx = canvas.getContext("2d")
+          if (!ctx || !templateImage) {
+            reject(new Error("Canvas context not available"))
+            return
           }
-        }
-        img.onerror = () => reject(new Error("Failed to load template image"))
-        img.src = templateImage
-      } catch (error) {
-        reject(error)
-      }
-    })
-  }, [templateImage, nameAreas, textSettings, names])
 
-  const generateCertificateDownload = useCallback(async () => {
+          const img = new Image()
+          img.crossOrigin = "anonymous"
+          img.onload = () => {
+            try {
+              canvas.width = img.width
+              canvas.height = img.height
+              ctx.drawImage(img, 0, 0)
+
+              nameAreas.forEach((area) => {
+                ctx.fillStyle = textSettings.color
+                let fontStyle = ""
+                if (textSettings.bold) fontStyle += "bold "
+                if (textSettings.italic) fontStyle += "italic "
+                ctx.font = `${fontStyle}${textSettings.size}px ${textSettings.font}`
+                ctx.textAlign = textSettings.align
+
+                if (textSettings.shadow) {
+                  ctx.shadowColor = textSettings.shadowColor
+                  ctx.shadowBlur = textSettings.shadowBlur
+                  ctx.shadowOffsetX = textSettings.shadowOffsetX
+                  ctx.shadowOffsetY = textSettings.shadowOffsetY
+                } else {
+                  ctx.shadowBlur = 0
+                  ctx.shadowOffsetX = 0
+                  ctx.shadowOffsetY = 0
+                }
+
+                let textX = area.x
+                if (textSettings.align === "center") textX = area.x + area.width / 2
+                else if (textSettings.align === "right") textX = area.x + area.width
+                const textY = area.y + area.height / 2 + textSettings.size / 3
+
+                if (textSettings.underline) {
+                  const m = ctx.measureText(area.content || "Sample Text")
+                  const underlineY = textY + 4
+                  ctx.beginPath()
+                  let underlineX = textX
+                  if (textSettings.align === "center") underlineX = textX - m.width / 2
+                  else if (textSettings.align === "right") underlineX = textX - m.width
+                  ctx.moveTo(underlineX, underlineY)
+                  ctx.lineTo(underlineX + m.width, underlineY)
+                  ctx.strokeStyle = textSettings.color
+                  ctx.lineWidth = 2
+                  ctx.stroke()
+                }
+                ctx.fillText(area.content || "Sample Text", textX, textY)
+              })
+
+              canvas.toBlob(
+                (blob) => {
+                  if (blob) resolve(blob)
+                  else reject(new Error("Failed to generate certificate blob"))
+                },
+                "image/png",
+                0.95,
+              )
+            } catch (error) {
+              reject(error)
+            }
+          }
+          img.onerror = () => reject(new Error("Failed to load template image"))
+          img.src = templateImage
+        } catch (error) {
+          reject(error)
+        }
+      })
+    },
+    [templateImage, nameAreas, textSettings],
+  )
+
+  const generateAllCertificates = useCallback(async () => {
     if (!templateImage || nameAreas.length === 0) {
       addLog("error", "Missing required data: template or text areas")
       return
     }
-    
-    // Check if we have certificate data
-    if (names.length === 0) {
-      addLog("error", "Please add certificate data")
-      return
-    }
-    
     setIsGenerating(true)
     setGenerationProgress(0)
-    setGenerationStartTime(new Date())
-    setCompletedCertificates(0)
     addLog("info", "Starting certificate generation")
-    
     try {
-      addLog("info", `Generating ${names.length} certificates...`)
-      
-      // Create a new ZIP file
-      const zip = new JSZip()
-      
-      // Generate certificates for each line
-      for (let i = 0; i < names.length; i++) {
-        setGenerationProgress((i / names.length) * 100)
-        setCompletedCertificates(i)
-        
-        const blob = await generateCertificate(i)
-        
-        // Get filename from first column (before first comma)
-        const firstColumn = names[i].split(',')[0].trim()
-        const filename = `${firstColumn}.png`
-        
-        // Add the certificate to the ZIP file
-        zip.file(filename, blob)
-        
-        addLog("info", `Generated certificate: ${filename}`)
-      }
-      
-      // Generate the ZIP file
-      addLog("info", "Creating ZIP file...")
-      setGenerationProgress(95)
-      
-      const zipBlob = await zip.generateAsync({ type: "blob" })
-      
-      // Download the ZIP file
-      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
-      const zipFilename = `certificates_${timestamp}.zip`
-      
-      saveAs(zipBlob, zipFilename)
-      
-      setGenerationProgress(100)
-      addLog("success", `${names.length} certificates generated and downloaded as ZIP file: ${zipFilename}`)
+      const blob = await generateCertificate("certificate")
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `certificate-${new Date().toISOString().split("T")[0]}.png`
+      a.click()
+      URL.revokeObjectURL(url)
+      addLog("success", "Certificate generated and downloaded successfully")
     } catch (error) {
-      addLog("error", `Failed to generate certificates: ${error}`)
+      addLog("error", `Failed to generate certificate: ${error}`)
     } finally {
       setIsGenerating(false)
       setGenerationProgress(0)
-      setGenerationStartTime(null)
-      setCompletedCertificates(0)
     }
-  }, [templateImage, nameAreas, generateCertificate, addLog, names])
+  }, [templateImage, nameAreas, generateCertificate, addLog])
 
   const deleteSelectedArea = useCallback(() => {
     if (!selectedAreaId) return
@@ -886,7 +722,6 @@ export default function CertificateGenerator() {
       ...selected,
       id: Date.now().toString(),
       name: `${selected.name} Copy`,
-      content: selected.content,
       x: selected.x + 20,
       y: selected.y + 20,
     }
@@ -895,20 +730,9 @@ export default function CertificateGenerator() {
     addLog("success", `Duplicated text area: ${newArea.name}`)
   }, [selectedAreaId, nameAreas, addLog])
 
-  const handleZoomIn = useCallback(() => {
-    setZoomLevel((prev) => Math.min(prev + 0.1, 2.0))
-    triggerCanvasUpdate()
-  }, [triggerCanvasUpdate])
-  
-  const handleZoomOut = useCallback(() => {
-    setZoomLevel((prev) => Math.max(prev - 0.1, 0.5))
-    triggerCanvasUpdate()
-  }, [triggerCanvasUpdate])
-  
-  const handleResetZoom = useCallback(() => {
-    setZoomLevel(1.0)
-    triggerCanvasUpdate()
-  }, [triggerCanvasUpdate])
+  const handleZoomIn = useCallback(() => setZoomLevel((prev) => Math.min(prev + 0.1, 2.0)), [])
+  const handleZoomOut = useCallback(() => setZoomLevel((prev) => Math.max(prev - 0.1, 0.5)), [])
+  const handleResetZoom = useCallback(() => setZoomLevel(1.0), [])
 
   useEffect(() => {
     const link = document.createElement("link")
@@ -926,21 +750,11 @@ export default function CertificateGenerator() {
   }, [])
 
   useEffect(() => {
-    // Initial canvas draw
     drawCanvas()
   }, [drawCanvas])
 
-
-
   useEffect(() => {
     addLog("info", "Certificate Generator initialized. Upload a template to get started!")
-    
-    // Cleanup function to clear any pending canvas updates
-    return () => {
-      if (debouncedCanvasUpdate.current) {
-        clearTimeout(debouncedCanvasUpdate.current)
-      }
-    }
   }, [addLog])
 
   const allAvailableFonts = [...GOOGLE_FONTS, ...customFonts]
@@ -1041,7 +855,6 @@ export default function CertificateGenerator() {
                             onChange={(e) => {
                               const newName = e.target.value
                               setNameAreas((prev) => prev.map((a) => (a.id === area.id ? { ...a, name: newName } : a)))
-                              triggerCanvasUpdate()
                             }}
                             className="text-sm font-medium bg-transparent border-none p-0 h-auto focus:ring-0 focus:outline-none text-white"
                           />
@@ -1073,6 +886,26 @@ export default function CertificateGenerator() {
                           )}
                         </div>
 
+                        <div>
+                          <Label htmlFor={`area-content-${area.id}`} className="text-xs text-gray-400">
+                            Content
+                          </Label>
+                          <Input
+                            id={`area-content-${area.id}`}
+                            type="text"
+                            value={area.content}
+                            onChange={(e) => {
+                              const newContent = e.target.value
+                              setNameAreas((prev) =>
+                                prev.map((a) => (a.id === area.id ? { ...a, content: newContent } : a)),
+                              )
+                              drawCanvas()
+                            }}
+                            placeholder="Enter text content..."
+                            className="text-sm bg-gray-800 border-gray-600 text-white"
+                          />
+                        </div>
+
                         {selectedAreaId === area.id && (
                           <div className="mt-2 space-y-2">
                             <div className="grid grid-cols-2 gap-2">
@@ -1087,7 +920,7 @@ export default function CertificateGenerator() {
                                   onChange={(e) => {
                                     const val = Number.parseInt(e.target.value) || 0
                                     setNameAreas((prev) => prev.map((a) => (a.id === area.id ? { ...a, x: val } : a)))
-                                    triggerCanvasUpdate()
+                                    drawCanvas()
                                   }}
                                   className="text-sm bg-gray-800 border-gray-600 text-white"
                                 />
@@ -1103,7 +936,7 @@ export default function CertificateGenerator() {
                                   onChange={(e) => {
                                     const val = Number.parseInt(e.target.value) || 0
                                     setNameAreas((prev) => prev.map((a) => (a.id === area.id ? { ...a, y: val } : a)))
-                                    triggerCanvasUpdate()
+                                    drawCanvas()
                                   }}
                                   className="text-sm bg-gray-800 border-gray-600 text-white"
                                 />
@@ -1123,7 +956,7 @@ export default function CertificateGenerator() {
                                     setNameAreas((prev) =>
                                       prev.map((a) => (a.id === area.id ? { ...a, width: val } : a)),
                                     )
-                                    triggerCanvasUpdate()
+                                    drawCanvas()
                                   }}
                                   className="text-sm bg-gray-800 border-gray-600 text-white"
                                 />
@@ -1141,196 +974,10 @@ export default function CertificateGenerator() {
                                     setNameAreas((prev) =>
                                       prev.map((a) => (a.id === area.id ? { ...a, height: val } : a)),
                                     )
-                                    triggerCanvasUpdate()
+                                    drawCanvas()
                                   }}
                                   className="text-sm bg-gray-800 border-gray-600 text-white"
                                 />
-                              </div>
-                            </div>
-                            <div>
-                              <Label htmlFor={`area-content-${area.id}`} className="text-xs text-gray-400">
-                                Content
-                              </Label>
-                              <Input
-                                id={`area-content-${area.id}`}
-                                type="text"
-                                value={area.content}
-                                placeholder="Enter text content..."
-                                onChange={(e) => {
-                                  const newContent = e.target.value
-                                  setNameAreas((prev) =>
-                                    prev.map((a) => (a.id === area.id ? { ...a, content: newContent } : a)),
-                                  )
-                                  // Use debounced update for smooth performance
-                                  triggerCanvasUpdate()
-                                }}
-                                className="text-sm bg-gray-800 border-gray-600 text-white"
-                              />
-                            </div>
-                            
-                            {/* Individual Text Area Controls */}
-                            <div className="space-y-3">
-                              <div>
-                                <Label className="text-xs text-gray-400">Font Size: {area.fontSize}px</Label>
-                                <Input
-                                  type="number"
-                                  value={area.fontSize}
-                                  onChange={(e) => {
-                                    const value = parseInt(e.target.value) || 8
-                                    const clampedValue = Math.max(8, Math.min(200, value))
-                                    setNameAreas((prev) =>
-                                      prev.map((a) => (a.id === area.id ? { ...a, fontSize: clampedValue } : a))
-                                    )
-                                    // Use debounced update for smooth performance
-                                    triggerCanvasUpdate()
-                                  }}
-                                  min={8}
-                                  max={200}
-                                  className="text-sm bg-gray-800 border-gray-600 text-white"
-                                />
-                              </div>
-                              
-                              <div>
-                                <Label className="text-xs text-gray-400">Font Family</Label>
-                                <Select
-                                  value={area.fontFamily}
-                                  onValueChange={(value) => {
-                                    setNameAreas((prev) =>
-                                      prev.map((a) => (a.id === area.id ? { ...a, fontFamily: value } : a))
-                                    )
-                                    triggerCanvasUpdate()
-                                  }}
-                                >
-                                  <SelectTrigger className="text-sm bg-gray-800 border-gray-600 text-white">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-gray-800 border-gray-600">
-                                    {allAvailableFonts.map((font) => (
-                                      <SelectItem
-                                        key={font}
-                                        value={font}
-                                        className="text-white hover:bg-gray-700"
-                                        style={{ fontFamily: font }}
-                                      >
-                                        {font}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              
-                              <div>
-                                <Label className="text-xs text-gray-400">Color</Label>
-                                <Input
-                                  type="color"
-                                  value={area.color}
-                                  onChange={(e) => {
-                                    setNameAreas((prev) =>
-                                      prev.map((a) => (a.id === area.id ? { ...a, color: e.target.value } : a))
-                                    )
-                                    triggerCanvasUpdate()
-                                  }}
-                                  className="w-full h-8 bg-gray-800 border-gray-600"
-                                />
-                              </div>
-                              
-                              <div className="flex items-center space-x-2">
-                                <Switch
-                                  checked={area.autoSize}
-                                  onCheckedChange={(checked) => {
-                                    setNameAreas((prev) =>
-                                      prev.map((a) => (a.id === area.id ? { ...a, autoSize: checked } : a))
-                                    )
-                                    // Use debounced update for smooth performance
-                                    triggerCanvasUpdate()
-                                  }}
-                                />
-                                <Label className="text-xs text-gray-400 cursor-pointer">Auto-size text to fit box</Label>
-                              </div>
-                              
-                              <div className="grid grid-cols-3 gap-2">
-                                <div className="flex items-center space-x-2">
-                                  <Switch
-                                    checked={area.bold}
-                                                                      onCheckedChange={(checked) => {
-                                    setNameAreas((prev) =>
-                                      prev.map((a) => (a.id === area.id ? { ...a, bold: checked } : a))
-                                    )
-                                    // Use debounced update for smooth performance
-                                    triggerCanvasUpdate()
-                                  }}
-                                  />
-                                  <Label className="text-xs text-gray-400 cursor-pointer">Bold</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <Switch
-                                    checked={area.italic}
-                                    onCheckedChange={(checked) => {
-                                      setNameAreas((prev) =>
-                                        prev.map((a) => (a.id === area.id ? { ...a, italic: checked } : a))
-                                      )
-                                      triggerCanvasUpdate()
-                                    }}
-                                  />
-                                  <Label className="text-xs text-gray-400 cursor-pointer">Italic</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <Switch
-                                    checked={area.underline}
-                                    onCheckedChange={(checked) => {
-                                      setNameAreas((prev) =>
-                                        prev.map((a) => (a.id === area.id ? { ...a, underline: checked } : a))
-                                      )
-                                      triggerCanvasUpdate()
-                                    }}
-                                  />
-                                  <Label className="text-xs text-gray-400 cursor-pointer">Underline</Label>
-                                </div>
-                              </div>
-                              
-                              <div>
-                                <Label className="text-xs text-gray-400">Alignment</Label>
-                                <div className="flex border border-gray-600 rounded bg-gray-800 overflow-hidden">
-                                  <Button
-                                    size="sm"
-                                    variant={area.align === "left" ? "default" : "ghost"}
-                                    onClick={() => {
-                                      setNameAreas((prev) =>
-                                        prev.map((a) => (a.id === area.id ? { ...a, align: "left" } : a))
-                                      )
-                                      triggerCanvasUpdate()
-                                    }}
-                                    className="flex-1 rounded-none text-white hover:bg-gray-600"
-                                  >
-                                    <AlignLeft className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant={area.align === "center" ? "default" : "ghost"}
-                                    onClick={() => {
-                                      setNameAreas((prev) =>
-                                        prev.map((a) => (a.id === area.id ? { ...a, align: "center" } : a))
-                                      )
-                                      triggerCanvasUpdate()
-                                    }}
-                                    className="flex-1 rounded-none border-x border-gray-600 text-white hover:bg-gray-600"
-                                  >
-                                    <AlignCenter className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant={area.align === "right" ? "default" : "ghost"}
-                                    onClick={() => {
-                                      setNameAreas((prev) =>
-                                        prev.map((a) => (a.id === area.id ? { ...a, align: "right" } : a))
-                                      )
-                                      triggerCanvasUpdate()
-                                    }}
-                                    className="flex-1 rounded-none text-white hover:bg-gray-600"
-                                  >
-                                    <AlignRight className="w-4 h-4" />
-                                  </Button>
-                                </div>
                               </div>
                             </div>
                           </div>
@@ -1344,6 +991,47 @@ export default function CertificateGenerator() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Names */}
+              <Card className="bg-gray-700 border-gray-600 shadow-lg">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2 text-white">
+                    <Users className="w-4 h-4 text-teal-400" />
+                    Recipients ({names.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <Label htmlFor="names" className="text-xs text-gray-300">
+                      Names (one per line)
+                    </Label>
+                    <Textarea
+                      id="names"
+                      placeholder={"John Doe\nJane Smith\nMike Johnson"}
+                      value={nameInput}
+                      onChange={(e) => {
+                        setNameInput(e.target.value)
+                        parseNamesFromText(e.target.value)
+                      }}
+                      rows={4}
+                      className="text-sm bg-gray-800 border-gray-600 text-white"
+                    />
+                  </div>
+                  <div className="text-center">
+                    <span className="text-xs text-gray-500">or</span>
+                  </div>
+                  <Button
+                    onClick={() => csvInputRef.current?.click()}
+                    variant="outline"
+                    className="w-full border-gray-600 text-white hover:bg-gray-600"
+                    size="sm"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload CSV
+                  </Button>
+                  <input ref={csvInputRef} type="file" accept=".csv" onChange={handleCSVUpload} className="hidden" />
+                </CardContent>
+              </Card>
             </div>
           </ScrollArea>
         </TabsContent>
@@ -1351,28 +1039,6 @@ export default function CertificateGenerator() {
         <TabsContent value="style" className="flex-1 p-4">
           <ScrollArea className="h-full">
             <div className="space-y-4">
-              {/* Preview */}
-              <Card className="bg-gray-700 border-gray-600 shadow-lg">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm text-white">Preview</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Label htmlFor="preview-name" className="text-xs text-gray-300">
-                    Preview Name
-                  </Label>
-                  <Input
-                    id="preview-name"
-                    value={previewName}
-                    onChange={(e) => {
-                      setPreviewName(e.target.value)
-                      triggerCanvasUpdate()
-                    }}
-                    placeholder="Enter name for preview"
-                    className="text-sm bg-gray-800 border-gray-600 text-white"
-                  />
-                </CardContent>
-              </Card>
-
               {/* Typography */}
               <Card className="bg-gray-700 border-gray-600 shadow-lg">
                 <CardHeader className="pb-3">
@@ -1386,10 +1052,7 @@ export default function CertificateGenerator() {
                     <Label className="text-xs text-gray-300 font-medium">Font Family</Label>
                     <Select
                       value={textSettings.font}
-                      onValueChange={(value) => {
-                        setTextSettings((prev) => ({ ...prev, font: value }))
-                        triggerCanvasUpdate()
-                      }}
+                      onValueChange={(value) => setTextSettings((prev) => ({ ...prev, font: value }))}
                     >
                       <SelectTrigger className="text-sm bg-gray-800 border-gray-600 text-white">
                         <SelectValue />
@@ -1411,18 +1074,13 @@ export default function CertificateGenerator() {
 
                   <div>
                     <Label className="text-xs text-gray-300 font-medium">Size: {textSettings.size}px</Label>
-                    <Input
-                      type="number"
-                      value={textSettings.size}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value) || 12
-                        const clampedValue = Math.max(12, Math.min(200, value))
-                        setTextSettings((prev) => ({ ...prev, size: clampedValue }))
-                        triggerCanvasUpdate()
-                      }}
+                    <Slider
+                      value={[textSettings.size]}
+                      onValueChange={([value]) => setTextSettings((prev) => ({ ...prev, size: value }))}
                       min={12}
                       max={200}
-                      className="text-sm bg-gray-800 border-gray-600 text-white mt-2"
+                      step={1}
+                      className="mt-2"
                     />
                   </div>
 
@@ -1535,48 +1193,33 @@ export default function CertificateGenerator() {
                       </div>
                       <div>
                         <Label className="text-xs text-gray-300">Blur: {textSettings.shadowBlur}px</Label>
-                        <Input
-                          type="number"
-                          value={textSettings.shadowBlur}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value) || 0
-                            const clampedValue = Math.max(0, Math.min(20, value))
-                            setTextSettings((prev) => ({ ...prev, shadowBlur: clampedValue }))
-                          }}
+                        <Slider
+                          value={[textSettings.shadowBlur]}
+                          onValueChange={([value]) => setTextSettings((prev) => ({ ...prev, shadowBlur: value }))}
                           min={0}
                           max={20}
-                          className="text-sm bg-gray-800 border-gray-600 text-white"
+                          step={1}
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <Label className="text-xs text-gray-300">X: {textSettings.shadowOffsetX}px</Label>
-                          <Input
-                            type="number"
-                            value={textSettings.shadowOffsetX}
-                            onChange={(e) => {
-                              const value = parseInt(e.target.value) || 0
-                              const clampedValue = Math.max(-10, Math.min(10, value))
-                              setTextSettings((prev) => ({ ...prev, shadowOffsetX: clampedValue }))
-                            }}
+                          <Slider
+                            value={[textSettings.shadowOffsetX]}
+                            onValueChange={([value]) => setTextSettings((prev) => ({ ...prev, shadowOffsetX: value }))}
                             min={-10}
                             max={10}
-                            className="text-sm bg-gray-800 border-gray-600 text-white"
+                            step={1}
                           />
                         </div>
                         <div>
                           <Label className="text-xs text-gray-300">Y: {textSettings.shadowOffsetY}px</Label>
-                          <Input
-                            type="number"
-                            value={textSettings.shadowOffsetY}
-                            onChange={(e) => {
-                              const value = parseInt(e.target.value) || 0
-                              const clampedValue = Math.max(-10, Math.min(10, value))
-                              setTextSettings((prev) => ({ ...prev, shadowOffsetY: clampedValue }))
-                            }}
+                          <Slider
+                            value={[textSettings.shadowOffsetY]}
+                            onValueChange={([value]) => setTextSettings((prev) => ({ ...prev, shadowOffsetY: value }))}
                             min={-10}
                             max={10}
-                            className="text-sm bg-gray-800 border-gray-600 text-white"
+                            step={1}
                           />
                         </div>
                       </div>
@@ -1604,110 +1247,51 @@ export default function CertificateGenerator() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2 text-white">
               <Download className="w-4 h-4 text-green-400" />
-              Generate & Download ZIP
+              Generate Certificates
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-center">
               <div>
+                <div className="text-2xl font-bold text-white">{names.length}</div>
+                <div className="text-xs text-gray-400">Recipients</div>
+              </div>
+              <div>
                 <div className="text-2xl font-bold text-white">{nameAreas.length}</div>
                 <div className="text-xs text-gray-400">Text Areas</div>
               </div>
-              <div>
-                <div className="text-2xl font-bold text-white">{names.length}</div>
-                <div className="text-xs text-gray-400">Certificates</div>
-              </div>
-            </div>
-
-            {/* Single Input Box for All Content */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-gray-300 font-medium">Certificate Data</Label>
-                <div className="flex space-x-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => csvInputRef.current?.click()}
-                    className="h-6 px-2 text-xs text-gray-300 hover:bg-gray-600"
-                  >
-                    CSV
-                  </Button>
-                  <input
-                    ref={csvInputRef}
-                    type="file"
-                    accept=".csv"
-                    onChange={handleCSVUpload}
-                    className="hidden"
-                  />
-                </div>
-              </div>
-              <textarea
-                value={nameInput}
-                onChange={(e) => {
-                  setNameInput(e.target.value)
-                  parseNamesFromText(e.target.value)
-                }}
-                placeholder={`Enter certificate data...&#10;Format: name, title, department (comma-separated)&#10;Example:&#10;John Doe, Manager, Engineering&#10;Jane Smith, Director, Marketing&#10;Bob Johnson, CEO, Sales`}
-                className="w-full h-32 p-3 text-sm bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              {names.length > 0 && (
-                <div className="text-xs text-green-400 bg-green-900/30 p-2 rounded border border-green-700">
-                  {"\u2713"} {names.length} certificates will be generated and downloaded as ZIP
-                </div>
-              )}
             </div>
 
             {isGenerating && (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex justify-between text-xs text-gray-300">
                   <span>Generating...</span>
                   <span>{Math.round(generationProgress)}%</span>
                 </div>
                 <Progress value={generationProgress} className="h-2" />
-                
-                {/* Timer and Certificate Count */}
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="text-center">
-                    <div className="text-white font-medium">
-                      {generationStartTime ? (
-                        Math.floor((Date.now() - generationStartTime.getTime()) / 1000)
-                      ) : 0}s
-                    </div>
-                    <div className="text-gray-400">Time Running</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-white font-medium">
-                      {completedCertificates} / {names.length}
-                    </div>
-                    <div className="text-gray-400">Completed</div>
-                  </div>
-                </div>
               </div>
             )}
 
             <Button
-              onClick={generateCertificateDownload}
+              onClick={generateAllCertificates}
               disabled={!templateImage || nameAreas.length === 0 || isGenerating}
               className="w-full bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-600 disabled:text-gray-400"
               size="lg"
             >
               {isGenerating ? (
-                "Generating ZIP..."
+                "Generating..."
               ) : (
                 <>
                   <Download className="w-4 h-4 mr-2" />
-                  Generate & Download ZIP
+                  Generate & Download
                 </>
               )}
             </Button>
 
-            {(!templateImage || nameAreas.length === 0 || names.length === 0) && (
+            {(!templateImage || nameAreas.length === 0) && (
               <div className="text-xs text-gray-400 text-center space-y-1">
                 {!templateImage && <div>{"•"} Upload a template</div>}
                 {nameAreas.length === 0 && <div>{"•"} Add text areas</div>}
-                {nameAreas.length > 0 && names.length === 0 && (
-                  <div>{"•"} Add certificate data</div>
-                )}
               </div>
             )}
           </CardContent>
@@ -1727,6 +1311,10 @@ export default function CertificateGenerator() {
             <div className="flex justify-between text-xs">
               <span className="text-gray-400">Text Areas:</span>
               <span className="text-white">{nameAreas.length}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-400">Recipients:</span>
+              <span className="text-white">{names.length}</span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-gray-400">Font:</span>
@@ -1830,10 +1418,7 @@ export default function CertificateGenerator() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => {
-                    setShowGrid(!showGrid)
-                    triggerCanvasUpdate()
-                  }}
+                  onClick={() => setShowGrid(!showGrid)}
                   className="border-gray-600 text-white hover:bg-gray-700"
                 >
                   <Grid className="w-4 h-4 mr-1" />
@@ -1925,4 +1510,3 @@ export default function CertificateGenerator() {
     </div>
   )
 }
-
