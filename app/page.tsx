@@ -63,7 +63,15 @@ interface NameArea {
   height: number
   id: string
   name: string
-  content: string // Add this new field
+  content: string
+  fontSize: number // Individual font size for each area
+  fontFamily: string // Individual font family for each area
+  color: string // Individual color for each area
+  bold: boolean // Individual bold setting
+  italic: boolean // Individual italic setting
+  underline: boolean // Individual underline setting
+  align: "left" | "center" | "right" // Individual alignment
+  autoSize: boolean // Whether to auto-size text to fit box
 }
 
 export interface LogEntry {
@@ -183,6 +191,48 @@ export default function CertificateGenerator() {
     setLogs((prev) => [newLog, ...prev.slice(0, 49)])
   }, [])
 
+  // Function to calculate optimal font size for text to fit within a box
+  const calculateOptimalFontSize = useCallback((text: string, area: NameArea, ctx: CanvasRenderingContext2D) => {
+    if (!text.trim()) return area.fontSize
+    
+    const maxWidth = area.width * 0.9 // Leave 10% margin
+    const maxHeight = area.height * 0.8 // Leave 20% margin for line height
+    
+    let fontSize = area.fontSize
+    let fontStyle = ""
+    if (area.bold) fontStyle += "bold "
+    if (area.italic) fontStyle += "italic "
+    
+    // Binary search for optimal font size
+    let minSize = 8
+    let maxSize = Math.min(200, Math.max(area.width, area.height))
+    
+    while (minSize <= maxSize) {
+      fontSize = Math.floor((minSize + maxSize) / 2)
+      ctx.font = `${fontStyle}${fontSize}px ${area.fontFamily}`
+      
+      const metrics = ctx.measureText(text)
+      const textWidth = metrics.width
+      const textHeight = fontSize * 1.2 // Approximate line height
+      
+      if (textWidth <= maxWidth && textHeight <= maxHeight) {
+        minSize = fontSize + 1
+      } else {
+        maxSize = fontSize - 1
+      }
+    }
+    
+    return Math.max(8, maxSize)
+  }, [])
+
+  // Simple canvas update without debouncing for now
+  const triggerCanvasUpdate = useCallback(() => {
+    // Use requestAnimationFrame for better performance
+    requestAnimationFrame(() => {
+      drawCanvas()
+    })
+  }, [])
+
   const addDefaultTextArea = useCallback(() => {
     if (!templateImage) {
       addLog("error", "Please upload a template image first to add a text area.")
@@ -196,11 +246,19 @@ export default function CertificateGenerator() {
     const newArea: NameArea = {
       id: Date.now().toString(),
       name: `Text Area ${nameAreas.length + 1}`,
-      content: "", // Add this line
+      content: "",
       x: defaultX,
       y: defaultY,
       width: defaultWidth,
       height: defaultHeight,
+      fontSize: 48,
+      fontFamily: "Montserrat",
+      color: "#ffffff",
+      bold: false,
+      italic: false,
+      underline: false,
+      align: "center",
+      autoSize: true,
     }
 
     setNameAreas((prev) => [...prev, newArea])
@@ -208,13 +266,15 @@ export default function CertificateGenerator() {
     addLog("success", `Added new text area: ${newArea.name}`)
   }, [templateImage, templateDimensions, nameAreas.length, addLog])
 
-  const drawCanvas = useCallback(() => {
+  const drawCanvas = useCallback((skipRerender = false) => {
     const canvas = canvasRef.current
     const mainContent = mainContentRef.current
     if (!canvas || !templateImage || !mainContent) return
 
     const ctx = canvas.getContext("2d")
     if (!ctx) return
+
+
 
     const img = new Image()
     img.crossOrigin = "anonymous"
@@ -280,13 +340,21 @@ export default function CertificateGenerator() {
         ctx.setLineDash([])
         ctx.fillText(area.name, scaledArea.x, scaledArea.y - 5)
 
-        ctx.fillStyle = textSettings.color
-        let fontStyle = ""
-        if (textSettings.bold) fontStyle += "bold "
-        if (textSettings.italic) fontStyle += "italic "
-        ctx.font = `${fontStyle}${textSettings.size * effectiveScale}px ${textSettings.font}`
-        ctx.textAlign = textSettings.align
+        // Calculate optimal font size if auto-size is enabled
+        const displayText = area.content || area.name || "Sample Text"
+        let finalFontSize = area.fontSize
+        if (area.autoSize && displayText.trim()) {
+          finalFontSize = calculateOptimalFontSize(displayText, area, ctx)
+        }
 
+        ctx.fillStyle = area.color
+        let fontStyle = ""
+        if (area.bold) fontStyle += "bold "
+        if (area.italic) fontStyle += "italic "
+        ctx.font = `${fontStyle}${finalFontSize * effectiveScale}px ${area.fontFamily}`
+        ctx.textAlign = area.align
+
+        // Apply shadow if enabled (using global settings for now)
         if (textSettings.shadow) {
           ctx.shadowColor = textSettings.shadowColor
           ctx.shadowBlur = textSettings.shadowBlur * effectiveScale
@@ -300,36 +368,34 @@ export default function CertificateGenerator() {
         }
 
         let textX = scaledArea.x
-        if (textSettings.align === "center") {
+        if (area.align === "center") {
           textX = scaledArea.x + scaledArea.width / 2
-        } else if (textSettings.align === "right") {
+        } else if (area.align === "right") {
           textX = scaledArea.x + scaledArea.width
         }
 
-        const textY = scaledArea.y + scaledArea.height / 2 + (textSettings.size * effectiveScale) / 3
+        const textY = scaledArea.y + scaledArea.height / 2 + (finalFontSize * effectiveScale) / 3
 
-        if (textSettings.underline) {
-          const displayText = area.content || area.name || "Sample Text"
+        if (area.underline) {
           const metrics = ctx.measureText(displayText)
           const underlineY = textY + 4
           ctx.beginPath()
           let underlineX = textX
           const underlineWidth = metrics.width
 
-          if (textSettings.align === "center") {
+          if (area.align === "center") {
             underlineX = textX - metrics.width / 2
-          } else if (textSettings.align === "right") {
+          } else if (area.align === "right") {
             underlineX = textX - metrics.width
           }
 
           ctx.moveTo(underlineX, underlineY)
           ctx.lineTo(underlineX + underlineWidth, underlineY)
-          ctx.strokeStyle = textSettings.color
+          ctx.strokeStyle = area.color
           ctx.lineWidth = 2
           ctx.stroke()
         }
 
-        const displayText = area.content || area.name || "Sample Text"
         ctx.fillText(displayText, textX, textY)
       })
     }
@@ -566,7 +632,20 @@ export default function CertificateGenerator() {
           const x = Math.min(startX, currX)
           const y = Math.min(startY, currY)
 
-          const temp: NameArea = { id: "temp", name: "New Area", x, y, width, height, content: "" }
+          const temp: NameArea = { 
+            id: "temp", 
+            name: "New Area", 
+            x, y, width, height, 
+            content: "",
+            fontSize: 48,
+            fontFamily: "Montserrat",
+            color: "#ffffff",
+            bold: false,
+            italic: false,
+            underline: false,
+            align: "center",
+            autoSize: true,
+          }
           setNameAreas((prev) => [...prev.filter((a) => a.id !== "temp"), temp])
         }
         const onUp = () => {
@@ -620,12 +699,19 @@ export default function CertificateGenerator() {
             ctx.drawImage(img, 0, 0)
 
             nameAreas.forEach((area) => {
-              ctx.fillStyle = textSettings.color
+              // Calculate optimal font size if auto-size is enabled
+              const displayText = area.content || "Sample Text"
+              let finalFontSize = area.fontSize
+              if (area.autoSize && displayText.trim()) {
+                finalFontSize = calculateOptimalFontSize(displayText, area, ctx)
+              }
+
+              ctx.fillStyle = area.color
               let fontStyle = ""
-              if (textSettings.bold) fontStyle += "bold "
-              if (textSettings.italic) fontStyle += "italic "
-              ctx.font = `${fontStyle}${textSettings.size}px ${textSettings.font}`
-              ctx.textAlign = textSettings.align
+              if (area.bold) fontStyle += "bold "
+              if (area.italic) fontStyle += "italic "
+              ctx.font = `${fontStyle}${finalFontSize}px ${area.fontFamily}`
+              ctx.textAlign = area.align
 
               if (textSettings.shadow) {
                 ctx.shadowColor = textSettings.shadowColor
@@ -639,22 +725,20 @@ export default function CertificateGenerator() {
               }
 
               let textX = area.x
-              if (textSettings.align === "center") textX = area.x + area.width / 2
-              else if (textSettings.align === "right") textX = area.x + area.width
-              const textY = area.y + area.height / 2 + textSettings.size / 3
+              if (area.align === "center") textX = area.x + area.width / 2
+              else if (area.align === "right") textX = area.x + area.width
+              const textY = area.y + area.height / 2 + finalFontSize / 3
 
-              const displayText = area.content || "Sample Text"
-
-              if (textSettings.underline) {
+              if (area.underline) {
                 const m = ctx.measureText(displayText)
                 const underlineY = textY + 4
                 ctx.beginPath()
                 let underlineX = textX
-                if (textSettings.align === "center") underlineX = textX - m.width / 2
-                else if (textSettings.align === "right") underlineX = textX - m.width
+                if (area.align === "center") underlineX = textX - m.width / 2
+                else if (area.align === "right") underlineX = textX - m.width
                 ctx.moveTo(underlineX, underlineY)
                 ctx.lineTo(underlineX + m.width, underlineY)
-                ctx.strokeStyle = textSettings.color
+                ctx.strokeStyle = area.color
                 ctx.lineWidth = 2
                 ctx.stroke()
               }
@@ -721,7 +805,7 @@ export default function CertificateGenerator() {
       ...selected,
       id: Date.now().toString(),
       name: `${selected.name} Copy`,
-      content: selected.content, // Add this line
+      content: selected.content,
       x: selected.x + 20,
       y: selected.y + 20,
     }
@@ -730,9 +814,20 @@ export default function CertificateGenerator() {
     addLog("success", `Duplicated text area: ${newArea.name}`)
   }, [selectedAreaId, nameAreas, addLog])
 
-  const handleZoomIn = useCallback(() => setZoomLevel((prev) => Math.min(prev + 0.1, 2.0)), [])
-  const handleZoomOut = useCallback(() => setZoomLevel((prev) => Math.max(prev - 0.1, 0.5)), [])
-  const handleResetZoom = useCallback(() => setZoomLevel(1.0), [])
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel((prev) => Math.min(prev + 0.1, 2.0))
+    triggerCanvasUpdate()
+  }, [triggerCanvasUpdate])
+  
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel((prev) => Math.max(prev - 0.1, 0.5))
+    triggerCanvasUpdate()
+  }, [triggerCanvasUpdate])
+  
+  const handleResetZoom = useCallback(() => {
+    setZoomLevel(1.0)
+    triggerCanvasUpdate()
+  }, [triggerCanvasUpdate])
 
   useEffect(() => {
     const link = document.createElement("link")
@@ -752,6 +847,8 @@ export default function CertificateGenerator() {
   useEffect(() => {
     drawCanvas()
   }, [drawCanvas])
+
+
 
   useEffect(() => {
     addLog("info", "Certificate Generator initialized. Upload a template to get started!")
@@ -855,6 +952,7 @@ export default function CertificateGenerator() {
                             onChange={(e) => {
                               const newName = e.target.value
                               setNameAreas((prev) => prev.map((a) => (a.id === area.id ? { ...a, name: newName } : a)))
+                              triggerCanvasUpdate()
                             }}
                             className="text-sm font-medium bg-transparent border-none p-0 h-auto focus:ring-0 focus:outline-none text-white"
                           />
@@ -900,7 +998,7 @@ export default function CertificateGenerator() {
                                   onChange={(e) => {
                                     const val = Number.parseInt(e.target.value) || 0
                                     setNameAreas((prev) => prev.map((a) => (a.id === area.id ? { ...a, x: val } : a)))
-                                    drawCanvas()
+                                    triggerCanvasUpdate()
                                   }}
                                   className="text-sm bg-gray-800 border-gray-600 text-white"
                                 />
@@ -916,7 +1014,7 @@ export default function CertificateGenerator() {
                                   onChange={(e) => {
                                     const val = Number.parseInt(e.target.value) || 0
                                     setNameAreas((prev) => prev.map((a) => (a.id === area.id ? { ...a, y: val } : a)))
-                                    drawCanvas()
+                                    triggerCanvasUpdate()
                                   }}
                                   className="text-sm bg-gray-800 border-gray-600 text-white"
                                 />
@@ -936,7 +1034,7 @@ export default function CertificateGenerator() {
                                     setNameAreas((prev) =>
                                       prev.map((a) => (a.id === area.id ? { ...a, width: val } : a)),
                                     )
-                                    drawCanvas()
+                                    triggerCanvasUpdate()
                                   }}
                                   className="text-sm bg-gray-800 border-gray-600 text-white"
                                 />
@@ -954,7 +1052,7 @@ export default function CertificateGenerator() {
                                     setNameAreas((prev) =>
                                       prev.map((a) => (a.id === area.id ? { ...a, height: val } : a)),
                                     )
-                                    drawCanvas()
+                                    triggerCanvasUpdate()
                                   }}
                                   className="text-sm bg-gray-800 border-gray-600 text-white"
                                 />
@@ -974,10 +1072,176 @@ export default function CertificateGenerator() {
                                   setNameAreas((prev) =>
                                     prev.map((a) => (a.id === area.id ? { ...a, content: newContent } : a)),
                                   )
-                                  drawCanvas()
+                                  // Use requestAnimationFrame for smooth updates
+                                  requestAnimationFrame(() => {
+                                    drawCanvas()
+                                  })
                                 }}
                                 className="text-sm bg-gray-800 border-gray-600 text-white"
                               />
+                            </div>
+                            
+                            {/* Individual Text Area Controls */}
+                            <div className="space-y-3">
+                              <div>
+                                <Label className="text-xs text-gray-400">Font Size: {area.fontSize}px</Label>
+                                <Slider
+                                  value={[area.fontSize]}
+                                  onValueChange={([value]) => {
+                                    setNameAreas((prev) =>
+                                      prev.map((a) => (a.id === area.id ? { ...a, fontSize: value } : a))
+                                    )
+                                    // Immediate update for sliders
+                                    drawCanvas()
+                                  }}
+                                  min={8}
+                                  max={200}
+                                  step={1}
+                                  className="mt-2"
+                                />
+                              </div>
+                              
+                              <div>
+                                <Label className="text-xs text-gray-400">Font Family</Label>
+                                <Select
+                                  value={area.fontFamily}
+                                  onValueChange={(value) => {
+                                    setNameAreas((prev) =>
+                                      prev.map((a) => (a.id === area.id ? { ...a, fontFamily: value } : a))
+                                    )
+                                    triggerCanvasUpdate()
+                                  }}
+                                >
+                                  <SelectTrigger className="text-sm bg-gray-800 border-gray-600 text-white">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-gray-800 border-gray-600">
+                                    {allAvailableFonts.map((font) => (
+                                      <SelectItem
+                                        key={font}
+                                        value={font}
+                                        className="text-white hover:bg-gray-700"
+                                        style={{ fontFamily: font }}
+                                      >
+                                        {font}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              
+                              <div>
+                                <Label className="text-xs text-gray-400">Color</Label>
+                                <Input
+                                  type="color"
+                                  value={area.color}
+                                  onChange={(e) => {
+                                    setNameAreas((prev) =>
+                                      prev.map((a) => (a.id === area.id ? { ...a, color: e.target.value } : a))
+                                    )
+                                    triggerCanvasUpdate()
+                                  }}
+                                  className="w-full h-8 bg-gray-800 border-gray-600"
+                                />
+                              </div>
+                              
+                              <div className="flex items-center space-x-2">
+                                <Switch
+                                  checked={area.autoSize}
+                                  onCheckedChange={(checked) => {
+                                    setNameAreas((prev) =>
+                                      prev.map((a) => (a.id === area.id ? { ...a, autoSize: checked } : a))
+                                    )
+                                    // Immediate update for toggles
+                                    drawCanvas()
+                                  }}
+                                />
+                                <Label className="text-xs text-gray-400 cursor-pointer">Auto-size text to fit box</Label>
+                              </div>
+                              
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="flex items-center space-x-2">
+                                  <Switch
+                                    checked={area.bold}
+                                    onCheckedChange={(checked) => {
+                                      setNameAreas((prev) =>
+                                        prev.map((a) => (a.id === area.id ? { ...a, bold: checked } : a))
+                                      )
+                                      triggerCanvasUpdate()
+                                    }}
+                                  />
+                                  <Label className="text-xs text-gray-400 cursor-pointer">Bold</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Switch
+                                    checked={area.italic}
+                                    onCheckedChange={(checked) => {
+                                      setNameAreas((prev) =>
+                                        prev.map((a) => (a.id === area.id ? { ...a, italic: checked } : a))
+                                      )
+                                      triggerCanvasUpdate()
+                                    }}
+                                  />
+                                  <Label className="text-xs text-gray-400 cursor-pointer">Italic</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Switch
+                                    checked={area.underline}
+                                    onCheckedChange={(checked) => {
+                                      setNameAreas((prev) =>
+                                        prev.map((a) => (a.id === area.id ? { ...a, underline: checked } : a))
+                                      )
+                                      triggerCanvasUpdate()
+                                    }}
+                                  />
+                                  <Label className="text-xs text-gray-400 cursor-pointer">Underline</Label>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <Label className="text-xs text-gray-400">Alignment</Label>
+                                <div className="flex border border-gray-600 rounded bg-gray-800 overflow-hidden">
+                                  <Button
+                                    size="sm"
+                                    variant={area.align === "left" ? "default" : "ghost"}
+                                    onClick={() => {
+                                      setNameAreas((prev) =>
+                                        prev.map((a) => (a.id === area.id ? { ...a, align: "left" } : a))
+                                      )
+                                      triggerCanvasUpdate()
+                                    }}
+                                    className="flex-1 rounded-none text-white hover:bg-gray-600"
+                                  >
+                                    <AlignLeft className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant={area.align === "center" ? "default" : "ghost"}
+                                    onClick={() => {
+                                      setNameAreas((prev) =>
+                                        prev.map((a) => (a.id === area.id ? { ...a, align: "center" } : a))
+                                      )
+                                      triggerCanvasUpdate()
+                                    }}
+                                    className="flex-1 rounded-none border-x border-gray-600 text-white hover:bg-gray-600"
+                                  >
+                                    <AlignCenter className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant={area.align === "right" ? "default" : "ghost"}
+                                    onClick={() => {
+                                      setNameAreas((prev) =>
+                                        prev.map((a) => (a.id === area.id ? { ...a, align: "right" } : a))
+                                      )
+                                      triggerCanvasUpdate()
+                                    }}
+                                    className="flex-1 rounded-none text-white hover:bg-gray-600"
+                                  >
+                                    <AlignRight className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -1009,7 +1273,10 @@ export default function CertificateGenerator() {
                   <Input
                     id="preview-name"
                     value={previewName}
-                    onChange={(e) => setPreviewName(e.target.value)}
+                    onChange={(e) => {
+                      setPreviewName(e.target.value)
+                      triggerCanvasUpdate()
+                    }}
                     placeholder="Enter name for preview"
                     className="text-sm bg-gray-800 border-gray-600 text-white"
                   />
@@ -1029,7 +1296,10 @@ export default function CertificateGenerator() {
                     <Label className="text-xs text-gray-300 font-medium">Font Family</Label>
                     <Select
                       value={textSettings.font}
-                      onValueChange={(value) => setTextSettings((prev) => ({ ...prev, font: value }))}
+                      onValueChange={(value) => {
+                        setTextSettings((prev) => ({ ...prev, font: value }))
+                        triggerCanvasUpdate()
+                      }}
                     >
                       <SelectTrigger className="text-sm bg-gray-800 border-gray-600 text-white">
                         <SelectValue />
@@ -1053,7 +1323,10 @@ export default function CertificateGenerator() {
                     <Label className="text-xs text-gray-300 font-medium">Size: {textSettings.size}px</Label>
                     <Slider
                       value={[textSettings.size]}
-                      onValueChange={([value]) => setTextSettings((prev) => ({ ...prev, size: value }))}
+                      onValueChange={([value]) => {
+                        setTextSettings((prev) => ({ ...prev, size: value }))
+                        triggerCanvasUpdate()
+                      }}
                       min={12}
                       max={200}
                       step={1}
@@ -1387,7 +1660,10 @@ export default function CertificateGenerator() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setShowGrid(!showGrid)}
+                  onClick={() => {
+                    setShowGrid(!showGrid)
+                    triggerCanvasUpdate()
+                  }}
                   className="border-gray-600 text-white hover:bg-gray-700"
                 >
                   <Grid className="w-4 h-4 mr-1" />
@@ -1479,3 +1755,4 @@ export default function CertificateGenerator() {
     </div>
   )
 }
+
