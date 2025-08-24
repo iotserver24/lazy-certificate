@@ -38,6 +38,8 @@ import {
 } from "lucide-react"
 import LogViewer from "@/components/log-viewer"
 import { cn } from "@/lib/utils"
+import JSZip from "jszip"
+import { saveAs } from "file-saver"
 
 interface TextSettings {
   font: string
@@ -137,6 +139,8 @@ export default function CertificateGenerator() {
   const [previewName, setPreviewName] = useState("John Doe")
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState(0)
+  const [generationStartTime, setGenerationStartTime] = useState<Date | null>(null)
+  const [completedCertificates, setCompletedCertificates] = useState(0)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [canvasScale, setCanvasScale] = useState(1)
   const [showGrid, setShowGrid] = useState(false)
@@ -340,8 +344,16 @@ export default function CertificateGenerator() {
         ctx.setLineDash([])
         ctx.fillText(area.name, scaledArea.x, scaledArea.y - 5)
 
+        // Get preview text - use first certificate data if available
+        let displayText = area.content || area.name || "Sample Text"
+        if (names.length > 0 && names[0]) {
+          const values = names[0].split(',').map(val => val.trim())
+          if (values[nameAreas.indexOf(area)] !== undefined) {
+            displayText = values[nameAreas.indexOf(area)]
+          }
+        }
+        
         // Calculate optimal font size if auto-size is enabled
-        const displayText = area.content || area.name || "Sample Text"
         let finalFontSize = area.fontSize
         if (area.autoSize && displayText.trim()) {
           finalFontSize = calculateOptimalFontSize(displayText, area, ctx)
@@ -539,17 +551,17 @@ export default function CertificateGenerator() {
   const parseNamesFromText = useCallback(
     (text: string) => {
       try {
-        const nameList = text
+        const lines = text
           .split("\n")
-          .map((name) => name.trim())
-          .filter((name) => name && name.length > 0)
+          .map((line) => line.trim())
+          .filter((line) => line && line.length > 0)
 
-        setNames(nameList)
-        if (nameList.length > 0) {
-          addLog("info", `Parsed ${nameList.length} names from input`)
+        setNames(lines)
+        if (lines.length > 0) {
+          addLog("info", `Parsed ${lines.length} certificate entries from input`)
         }
       } catch {
-        addLog("error", "Failed to parse names from text input")
+        addLog("error", "Failed to parse certificate data from text input")
       }
     },
     [addLog],
@@ -680,7 +692,7 @@ export default function CertificateGenerator() {
     [templateImage, nameAreas, selectedAreaId, canvasScale, isSelecting, addLog],
   )
 
-  const generateCertificate = useCallback((): Promise<Blob> => {
+  const generateCertificate = useCallback((certificateIndex: number = 0): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       try {
         const canvas = document.createElement("canvas")
@@ -698,9 +710,21 @@ export default function CertificateGenerator() {
             canvas.height = img.height
             ctx.drawImage(img, 0, 0)
 
-            nameAreas.forEach((area) => {
+            // Get the certificate data for this index
+            const certificateData = names[certificateIndex]
+            if (!certificateData) {
+              reject(new Error(`No certificate data found for index ${certificateIndex}`))
+              return
+            }
+
+            // Split the certificate data by commas
+            const values = certificateData.split(',').map(val => val.trim())
+
+            nameAreas.forEach((area, areaIndex) => {
+              // Get the value for this area (use areaIndex to get the corresponding value)
+              let displayText = values[areaIndex] || area.content || "Sample Text"
+
               // Calculate optimal font size if auto-size is enabled
-              const displayText = area.content || "Sample Text"
               let finalFontSize = area.fontSize
               if (area.autoSize && displayText.trim()) {
                 finalFontSize = calculateOptimalFontSize(displayText, area, ctx)
@@ -763,32 +787,72 @@ export default function CertificateGenerator() {
         reject(error)
       }
     })
-  }, [templateImage, nameAreas, textSettings])
+  }, [templateImage, nameAreas, textSettings, names])
 
   const generateCertificateDownload = useCallback(async () => {
     if (!templateImage || nameAreas.length === 0) {
       addLog("error", "Missing required data: template or text areas")
       return
     }
+    
+    // Check if we have certificate data
+    if (names.length === 0) {
+      addLog("error", "Please add certificate data")
+      return
+    }
+    
     setIsGenerating(true)
     setGenerationProgress(0)
+    setGenerationStartTime(new Date())
+    setCompletedCertificates(0)
     addLog("info", "Starting certificate generation")
+    
     try {
-      const blob = await generateCertificate()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `certificate-${new Date().toISOString().split("T")[0]}.png`
-      a.click()
-      URL.revokeObjectURL(url)
-      addLog("success", "Certificate generated and downloaded successfully")
+      addLog("info", `Generating ${names.length} certificates...`)
+      
+      // Create a new ZIP file
+      const zip = new JSZip()
+      
+      // Generate certificates for each line
+      for (let i = 0; i < names.length; i++) {
+        setGenerationProgress((i / names.length) * 100)
+        setCompletedCertificates(i)
+        
+        const blob = await generateCertificate(i)
+        
+        // Get filename from first column (before first comma)
+        const firstColumn = names[i].split(',')[0].trim()
+        const filename = `${firstColumn}.png`
+        
+        // Add the certificate to the ZIP file
+        zip.file(filename, blob)
+        
+        addLog("info", `Generated certificate: ${filename}`)
+      }
+      
+      // Generate the ZIP file
+      addLog("info", "Creating ZIP file...")
+      setGenerationProgress(95)
+      
+      const zipBlob = await zip.generateAsync({ type: "blob" })
+      
+      // Download the ZIP file
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+      const zipFilename = `certificates_${timestamp}.zip`
+      
+      saveAs(zipBlob, zipFilename)
+      
+      setGenerationProgress(100)
+      addLog("success", `${names.length} certificates generated and downloaded as ZIP file: ${zipFilename}`)
     } catch (error) {
-      addLog("error", `Failed to generate certificate: ${error}`)
+      addLog("error", `Failed to generate certificates: ${error}`)
     } finally {
       setIsGenerating(false)
       setGenerationProgress(0)
+      setGenerationStartTime(null)
+      setCompletedCertificates(0)
     }
-  }, [templateImage, nameAreas, generateCertificate, addLog])
+  }, [templateImage, nameAreas, generateCertificate, addLog, names])
 
   const deleteSelectedArea = useCallback(() => {
     if (!selectedAreaId) return
@@ -1497,24 +1561,84 @@ export default function CertificateGenerator() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2 text-white">
               <Download className="w-4 h-4 text-green-400" />
-              Generate Certificates
+              Generate & Download ZIP
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 text-center">
+            <div className="grid grid-cols-2 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold text-white">{nameAreas.length}</div>
                 <div className="text-xs text-gray-400">Text Areas</div>
               </div>
+              <div>
+                <div className="text-2xl font-bold text-white">{names.length}</div>
+                <div className="text-xs text-gray-400">Certificates</div>
+              </div>
+            </div>
+
+            {/* Single Input Box for All Content */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-gray-300 font-medium">Certificate Data</Label>
+                <div className="flex space-x-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => csvInputRef.current?.click()}
+                    className="h-6 px-2 text-xs text-gray-300 hover:bg-gray-600"
+                  >
+                    CSV
+                  </Button>
+                  <input
+                    ref={csvInputRef}
+                    type="file"
+                    accept=".csv"
+                    onChange={handleCSVUpload}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+              <textarea
+                value={nameInput}
+                onChange={(e) => {
+                  setNameInput(e.target.value)
+                  parseNamesFromText(e.target.value)
+                }}
+                placeholder={`Enter certificate data...&#10;Format: name, title, department (comma-separated)&#10;Example:&#10;John Doe, Manager, Engineering&#10;Jane Smith, Director, Marketing&#10;Bob Johnson, CEO, Sales`}
+                className="w-full h-32 p-3 text-sm bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {names.length > 0 && (
+                <div className="text-xs text-green-400 bg-green-900/30 p-2 rounded border border-green-700">
+                  {"\u2713"} {names.length} certificates will be generated and downloaded as ZIP
+                </div>
+              )}
             </div>
 
             {isGenerating && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex justify-between text-xs text-gray-300">
                   <span>Generating...</span>
                   <span>{Math.round(generationProgress)}%</span>
                 </div>
                 <Progress value={generationProgress} className="h-2" />
+                
+                {/* Timer and Certificate Count */}
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="text-center">
+                    <div className="text-white font-medium">
+                      {generationStartTime ? (
+                        Math.floor((Date.now() - generationStartTime.getTime()) / 1000)
+                      ) : 0}s
+                    </div>
+                    <div className="text-gray-400">Time Running</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-white font-medium">
+                      {completedCertificates} / {names.length}
+                    </div>
+                    <div className="text-gray-400">Completed</div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1525,19 +1649,22 @@ export default function CertificateGenerator() {
               size="lg"
             >
               {isGenerating ? (
-                "Generating..."
+                "Generating ZIP..."
               ) : (
                 <>
                   <Download className="w-4 h-4 mr-2" />
-                  Generate Certificate
+                  Generate & Download ZIP
                 </>
               )}
             </Button>
 
-            {(!templateImage || nameAreas.length === 0) && (
+            {(!templateImage || nameAreas.length === 0 || names.length === 0) && (
               <div className="text-xs text-gray-400 text-center space-y-1">
                 {!templateImage && <div>{"•"} Upload a template</div>}
                 {nameAreas.length === 0 && <div>{"•"} Add text areas</div>}
+                {nameAreas.length > 0 && names.length === 0 && (
+                  <div>{"•"} Add certificate data</div>
+                )}
               </div>
             )}
           </CardContent>
